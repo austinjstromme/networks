@@ -1,5 +1,7 @@
 var PORT = 33333;
-var HOST = '127.0.0.1';
+
+//var HOST = '127.0.0.1';
+var HOST = 'attu4.cs.washington.edu'
 
 var dgram = require('dgram');
 var message = new Buffer('sup, mbot A');
