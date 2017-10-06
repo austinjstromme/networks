@@ -4,7 +4,7 @@ var PORT = 33333;
 var HOST = 'attu4.cs.washington.edu'
 
 var dgram = require('dgram');
-var message = new Buffer('sup, mbot A');
+var message = new Buffer([0xC4,0x61]);
 
 var client = dgram.createSocket('udp4');
 client.send(message, 0, message.length, PORT, HOST, function(err, bytes) {
