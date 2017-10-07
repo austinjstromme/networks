@@ -33,8 +33,14 @@ server.on('message', function (message, remote) {
   var pMessage = processMessage(message);
   var command = pMessage["command"];
 
+  if (!pMessage["valid"]) {
+    console.log("invalidly formatted message!");
+    return;
+  }
+
   // now handle it
   if (command == 0x0) {
+    console.log("we got a hello!")
     handleHello(sessions, pMessage, remote);
     return;
   }
@@ -148,6 +154,8 @@ function handleGoodbye(sessions, pMessage) {
 function respond(session, type) {
   var client = dgram.createSocket('udp6');
 
+  console.log("we're sending off a " + type);
+
   var message = Buffer.allocUnsafe(12);
 
   message.writeUInt16BE(50273, 0);
@@ -165,7 +173,7 @@ function processMessage(message) {
   var pMessage = {};
   pMessage["valid"] = false;
 
-  if ((message.length < 12 || message[0] != 0xC4 || message[1] != 0x61
+  if (message.length < 12 || message[0] != 0xC4 || message[1] != 0x61
     || message[2] != 0x1) {
     // invalid
     return pMessage;
@@ -179,7 +187,7 @@ function processMessage(message) {
 
   var iter = message.values();
 
-  for (int i = 0; i < 12; i++) {
+  for (var i = 0; i < 12; i++) {
     iter.next();
   }
 
@@ -198,7 +206,7 @@ function cull(sessions) {
   // iterate over sessions and kill the ones which are too old; send goodbye
 
   for (var [key, val] of sessions.entries()) {
-    if ((getTime - val.["time"]) > 30) {
+    if ((getTime - val["time"]) > 30) {
       respond(val, GOODBYE);
       sessions.delete(key);
     }

@@ -6,9 +6,15 @@ var HOST = 'attu4.cs.washington.edu'
 var dgram = require('dgram');
 var message = new Buffer([0xC4,0x61]);
 
-var client = dgram.createSocket('udp4');
-client.send(message, 0, message.length, PORT, HOST, function(err, bytes) {
-    if (err) throw err;
-    console.log('UDP message sent to ' + HOST +':'+ PORT);
-    client.close();
-});
+var client = dgram.createSocket('udp6');
+
+var message = Buffer.allocUnsafe(12);
+
+message.writeUInt16BE(50273, 0);
+message.writeUInt8(1, 2);
+message.writeUInt8(0, 3);
+message.writeUInt32BE(0, 4);
+message.writeUInt32BE(666, 8);
+
+client.send(message, 0, message.length, PORT,
+  HOST, function (err, bytes) { client.close(); });
