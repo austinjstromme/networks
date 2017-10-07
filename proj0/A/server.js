@@ -12,8 +12,8 @@ var server = dgram.createSocket('udp6');
 
 // set response types
 const HELLO = 0;
-const ALIVE = 1;
-const GOODBYE = 2;
+const ALIVE = 2;
+const GOODBYE = 3;
 
 // this is the data structure which maps from session
 // ids to session objects
@@ -44,6 +44,35 @@ server.on('message', function (message, remote) {
     return;
   }
 
+  var session = sessions.get(pMessage["sesID"]);
+
+  // update time
+  session["time"] = getTime();
+
+  // now update the seqNum
+
+  // we expect dif == 1
+  var dif = pMessage["seqNum"] - session["seqNum"];
+
+  if (dif == 1) {
+    session["seqNum"] = pMessage["seqNum"];
+  } else if (dif == 0) {
+    // print duplicate packet and discard this one
+    console.log("duplicate packet\n");
+    return;
+  } else if (dif < 0) {
+    // sequence number is "from the past", so we say goodbye and end the session
+    // which is the same as handle goodbye
+    handleGoodbye(sessions, pMessage);
+    return;
+  }
+
+  // for each lost packet, print "lost packet\n"
+  while (dif > 1) {
+    dif--;
+    console.log("lost packet\n");
+  }
+
   if (command == 0x1) {
     handleData(sessions, pMessage);
   } else if (command == 0x2) {
@@ -64,10 +93,10 @@ server.bind(PORT);
 
 // handles hellos for the server
 function handleHello(sessions, pMessage, remote) {
-  // if the session is already active, delete the session and say goodbye
   if (sessions.has(pMessage["sesID"])) {
-    respond(pMessage["sesID"], GOODBYE);
-    sessions.delete(pMessage["sesID"]);
+    // if the session is already active, delete the session and say goodbye
+    // this is the same as handleGoodbye, so just use it
+    handleGoodbye(sessions, pMessage);
     return;
   }
 
@@ -85,7 +114,6 @@ function handleHello(sessions, pMessage, remote) {
   respond(session, HELLO);
 }
 
-// handles datas for the server
 function handleData(sessions, pMessage) {
   // update time then print the payload and then respond
   var session = sessions.get(pMessage["sesID"]);
@@ -120,9 +148,13 @@ function handleGoodbye(sessions, pMessage) {
 function respond(session, type) {
   var client = dgram.createSocket('udp6');
 
-  var message = new Buffer([0xC4, 0x61, 0x1, type]);
+  var message = Buffer.allocUnsafe(12);
 
+  message.writeUInt16BE(50273, 0);
+  message.writeUInt8(1, 2);
+  message.writeUInt8(type, 3);
   message.writeUInt32BE(session["seqNum"], 4);
+  message.writeUInt32BE(session["sesID"], 8);
 
   client.send(message, 0, message.length, session["clientPort"],
     session["clientAddress"], function (err, bytes) { client.close(); });
@@ -139,6 +171,8 @@ function processMessage(message) {
     return pMessage;
   }
 
+  pMessage["valid"] = true;
+
   pMessage["command"] = message[3];
   pMessage["seqNum"] = message.readUInt32BE(4);
   pMessage["sesID"] = message.readUInt32BE(8);
@@ -150,6 +184,8 @@ function processMessage(message) {
   }
 
   pMessage["data"] = iter;
+
+  return pMessage;
 }
 
 // return the current time since 1970 in seconds
@@ -159,10 +195,11 @@ function getTime() {
 
 // cull the old sessions
 function cull(sessions) {
-  // iterate over sessions and kill the ones which are too old
+  // iterate over sessions and kill the ones which are too old; send goodbye
 
   for (var [key, val] of sessions.entries()) {
     if ((getTime - val.["time"]) > 30) {
+      respond(val, GOODBYE);
       sessions.delete(key);
     }
   }
