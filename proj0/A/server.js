@@ -6,6 +6,7 @@ var PORT = process.argv[2];
 
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
+var messages = require('../utils/messages');
 
 // make our server
 var server = dgram.createSocket('udp6');
@@ -37,7 +38,7 @@ server.on('message', function (message, remote) {
   timeout = setTimeout(sendGoodbyes, 30000);
 
   // now process the message
-  var pMessage = processMessage(message);
+  var pMessage = messages.processMessage(message);
   var command = pMessage["command"];
 
   if (!pMessage["valid"]) {
@@ -104,7 +105,12 @@ server.bind(PORT);
 // helper functions
 
 function sendGoodbyes() {
-  console.log("send goodbyes!");
+  console.log("sending goodbyes!");
+  for (var x of sessions.keys()) {
+    // say goodbye
+    respond(sessions.get(x), GOODBYE);
+  }
+  sessions.clear();
 }
 
 // handles hellos for the server
@@ -135,7 +141,7 @@ function handleData(sessions, pMessage) {
   var session = sessions.get(pMessage["sesID"]);
 
   session["time"] = getTime();
-  for (var x in session["data"]) {
+  for (var x of session["data"]) {
     console.log(x);
   }
   console.log("\n");
@@ -176,34 +182,6 @@ function respond(session, type) {
 
   client.send(message, 0, message.length, session["clientPort"],
     session["clientAddress"], function (err, bytes) { client.close(); });
-}
-
-// process the message
-function processMessage(message) {
-  var pMessage = {};
-  pMessage["valid"] = false;
-
-  if (message.length < 12 || message[0] != 0xC4 || message[1] != 0x61
-    || message[2] != 0x1) {
-    // invalid
-    return pMessage;
-  }
-
-  pMessage["valid"] = true;
-
-  pMessage["command"] = message[3];
-  pMessage["seqNum"] = message.readUInt32BE(4);
-  pMessage["sesID"] = message.readUInt32BE(8);
-
-  var iter = message.values();
-
-  for (var i = 0; i < 12; i++) {
-    iter.next();
-  }
-
-  pMessage["data"] = iter;
-
-  return pMessage;
 }
 
 // return the current time since 1970 in seconds
