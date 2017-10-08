@@ -1,7 +1,7 @@
 var PORT = 33333;
 
 //var HOST = '127.0.0.1';
-var HOST = 'attu4.cs.washington.edu'
+var HOST = 'attu3.cs.washington.edu'
 
 var dgram = require('dgram');
 var message = new Buffer([0xC4,0x61]);
