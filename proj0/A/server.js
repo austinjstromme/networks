@@ -19,6 +19,8 @@ const GOODBYE = 3;
 // ids to session objects
 var sessions = new Map();
 
+var timeout = setTimeout(sendGoodbyes, 30000);
+
 server.on('listening', function () {
   var address = server.address();
   console.log('Listening on ' + address.address + ':'
@@ -28,6 +30,11 @@ server.on('listening', function () {
 server.on('message', function (message, remote) {
   // we've received a message - process it; but first cull
   cull(sessions);
+
+  // clear the old timeout
+  clearTimeout(timeout);
+  // send the new
+  timeout = setTimeout(sendGoodbyes, 30000);
 
   // now process the message
   var pMessage = processMessage(message);
@@ -94,8 +101,11 @@ server.on('message', function (message, remote) {
 
 server.bind(PORT);
 
-
 // helper functions
+
+function sendGoodbyes() {
+  console.log("send goodbyes!");
+}
 
 // handles hellos for the server
 function handleHello(sessions, pMessage, remote) {
