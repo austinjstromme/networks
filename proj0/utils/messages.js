@@ -25,3 +25,33 @@ exports.processMessage = function(message) {
 
   return pMessage;
 }
+
+exports.sendMessage = function(socket, clientPort,
+  clientAddress, seqNum, sesID, type, data) {
+
+  var datalen;
+  if (!data) {
+    datalen = 0;
+  } else {
+    datalen = data.length;
+  }
+
+  var message = Buffer.allocUnsafe(12 + datalen);
+
+  // write out the header
+  message.writeUInt16BE(50273, 0);
+  message.writeUInt8(1, 2);
+  message.writeUInt8(type, 3);
+  message.writeUInt32BE(seqNum, 4);
+  message.writeUInt32BE(sesID, 8);
+
+  // write out the data if necessary
+  if (datalen > 0) {
+    message.write(data.toString('ascii'), 12);
+  }
+
+  // send the message over socket
+  socket.send(message, 0, message.length, clientPort,
+    clientAddress, function (err, bytes) {});
+  }
+

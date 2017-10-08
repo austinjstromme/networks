@@ -13,6 +13,7 @@ var server = dgram.createSocket('udp6');
 
 // set response types
 const HELLO = 0;
+const DATA = 1;
 const ALIVE = 2;
 const GOODBYE = 3;
 
@@ -168,20 +169,9 @@ function handleGoodbye(sessions, pMessage) {
 
 // responds to session with response type type (defined above)
 function respond(session, type) {
-  var client = dgram.createSocket('udp6');
-
-  console.log("we're sending off a " + type);
-
-  var message = Buffer.allocUnsafe(12);
-
-  message.writeUInt16BE(50273, 0);
-  message.writeUInt8(1, 2);
-  message.writeUInt8(type, 3);
-  message.writeUInt32BE(session["seqNum"], 4);
-  message.writeUInt32BE(session["sesID"], 8);
-
-  client.send(message, 0, message.length, session["clientPort"],
-    session["clientAddress"], function (err, bytes) { client.close(); });
+  messages.sendMessage(server, session["clientPort"],
+    session["clientAddress"], session["seqNum"], session["sesID"],
+    type);
 }
 
 // return the current time since 1970 in seconds
