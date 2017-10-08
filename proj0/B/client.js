@@ -26,25 +26,24 @@ client.on('listening', function () {
   console.log('Listening on ' + address.address + ':'
     + address.port);
 
+  // send HELLO
   messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x0);
-
 });
 
 client.on('message', function () {
-  // now process the message
+  // process the message
   var pMessage = messages.processMessage(message);
   var command = pMessage["command"];
 
-  if (command == 0x0) { //
+  if (command == 0x0) { // on receiving HELLO. go to listening state
   	clearTimeout(timeout);
-  	var timeout = setTimeout(sendGoodbye, 3000000);
-  } else if (command == 0x2) { //
+  	timeout = setTimeout(sendGoodbye, 3000000);
+  } else if (command == 0x2) { // on reveiving ALIVE, go to listening state
   	clearTimeout(timeout);
-  	var timeout = setTimeout(sendGoodbye, 3000000);
-  } else if (command == 0x3) { //
+  	timeout = setTimeout(sendGoodbye, 3000000);
+  } else if (command == 0x3) { // on reveiving GOODBYE, close the client
   	client.close();
   }
-
 })
 
 // on std input, send a data message to server
@@ -54,7 +53,7 @@ process.stdin.on('data', function (data) {
   seqNum++;
   
   clearTimeout(timeout);
-  var timeout = setTimeout(sendGoodbye, 30000);
+  timeout = setTimeout(sendGoodbye, 30000);
 
 });
 
@@ -64,5 +63,4 @@ process.stdin.on('data', function (data) {
 function sendGoodbye () {
   console.log("sending goodbyes!");
   messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
-
 }
