@@ -1,10 +1,10 @@
 // non-hread based implementation of a P0P client
 
 // host and port give the location of the server
-//var HOST = process.argv[2];
-var HOST = '127.0.0.1';
-//var PORT = process.argv[3];
-var PORT = 33333;
+var HOST = process.argv[2];
+//var HOST = '127.0.0.1';
+var PORT = process.argv[3];
+//var PORT = 33333;
 
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
