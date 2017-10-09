@@ -1,15 +1,17 @@
 // non-hread based implementation of a P0P client
 
 // host and port give the location of the server
-var HOST = process.argv[2];
-var PORT = process.argv[3];
+//var HOST = process.argv[2];
+var HOST = '127.0.0.1';
+//var PORT = process.argv[3];
+var PORT = 33333;
 
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
 var messages = require('../utils/messages');
 
 // make our server
-var client = dgram.createSocket('udp6');
+var client = dgram.createSocket('udp4');
 
 // generate a random session ID
 var sesID = Math.floor(Math.random() * (Math.pow(2, 32) - 1));
@@ -28,9 +30,11 @@ client.on('listening', function () {
 
   // send HELLO
   messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x0);
+  seqNum++;
+
 });
 
-client.on('message', function () {
+client.on('message', function (message, remote) {
   // process the message
   var pMessage = messages.processMessage(message);
   var command = pMessage["command"];
@@ -57,7 +61,7 @@ process.stdin.on('data', function (data) {
 
 });
 
-//client.bind(69696);
+client.bind(33331);
 
 // Helper functions
 function sendGoodbye () {
