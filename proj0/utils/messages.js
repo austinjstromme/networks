@@ -15,13 +15,13 @@ exports.processMessage = function(message) {
   pMessage["seqNum"] = message.readUInt32BE(4);
   pMessage["sesID"] = message.readUInt32BE(8);
 
-  var iter = message.values();
+  var data = "";
 
-  for (var i = 0; i < 12; i++) {
-    iter.next();
+  if (pMessage["command"] == 0x1) {
+    data = message.toString("ascii", 12);
   }
 
-  pMessage["data"] = iter;
+  pMessage["data"] = data;
 
   return pMessage;
 }
@@ -54,6 +54,6 @@ exports.sendMessage = function(socket, clientPort,
   socket.send(message, 0, message.length, clientPort,
     clientAddress, function (err, bytes) {
       if (err) throw err;
-      console.log("message sent, type = " + type); });
+    });
   }
 

@@ -142,10 +142,8 @@ function handleData(sessions, pMessage) {
   var session = sessions.get(pMessage["sesID"]);
 
   session["time"] = getTime();
-  for (var x of session["data"]) {
-    console.log(x);
-  }
-  console.log("\n");
+
+  console.log(pMessage["data"]);
 
   // now respond
   respond(session, HELLO);
