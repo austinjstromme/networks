@@ -9,7 +9,7 @@ var dgram = require('dgram');
 var messages = require('../utils/messages');
 
 // make our server
-var server = dgram.createSocket('udp6');
+var server = dgram.createSocket('udp4');
 
 // set response types
 const HELLO = 0;

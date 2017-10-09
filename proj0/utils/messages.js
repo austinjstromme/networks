@@ -53,6 +53,7 @@ exports.sendMessage = function(socket, clientPort,
   // send the message over socket
   socket.send(message, 0, message.length, clientPort,
     clientAddress, function (err, bytes) {
+      if (err) throw err;
       console.log("message sent, type = " + type); });
   }
 
