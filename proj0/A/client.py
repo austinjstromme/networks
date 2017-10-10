@@ -25,6 +25,8 @@ def sendMessage(socket, clientPort, clientAddress, seqNum, sesID, command,
 
   message = createHeader(seqNum, sesID, command)
 
+  print("seqNum == " + str(seqNum))
+
   if (data != None):
     # append data
     message = message + data
@@ -78,6 +80,8 @@ class thread(threading.Thread):
     global state
     while (state > -2):
       data, servAddress = self.sock.recvfrom(4096)
+      # need to add in a process message componenet here to
+      # deal with the fact that the seqNums won't quite be right
       # kill the alarm
       signal.alarm(0)
       # now handle what type of input it is
@@ -96,17 +100,25 @@ th.start()
 
 # send hello
 sendMessage(sock, port, address, seqNum, sesID, HELLO)
+seqNum += 1
 
 while (state > -1):
   # we're not in closing or closed - hence wait for input
-  line = sys.stdin.readline()
+  try:
+    line = sys.stdin.readline()
+  except KeyboardInterrupt:
+    state = -2
+    break
   if not line:
-    #ctrl-d 
+    # ctrl-d
     state = -1
+    break
+
   # now we have a line of input, send it off in a message
   signal.alarm(30)
   state = 2
   sendMessage(sock, port, address, seqNum, sesID, DATA, line[:-1])
+  seqNum += 1
 
 if (state == -1):
   # closing state

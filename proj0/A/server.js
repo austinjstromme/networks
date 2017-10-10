@@ -68,12 +68,13 @@ server.on('message', function (message, remote) {
 
   // we expect dif == 1
   var dif = pMessage["seqNum"] - session["seqNum"];
+  console.log("dif == " + dif)
 
   if (dif == 1) {
     session["seqNum"] = pMessage["seqNum"];
   } else if (dif == 0) {
     // print duplicate packet and discard this one
-    console.log("duplicate packet\n");
+    console.log("duplicate packet");
     return;
   } else if (dif < 0) {
     // sequence number is "from the past", so we say goodbye and end the session
@@ -85,7 +86,7 @@ server.on('message', function (message, remote) {
   // for each lost packet, print "lost packet\n"
   while (dif > 1) {
     dif--;
-    console.log("lost packet\n");
+    console.log("lost packet");
   }
 
   if (command == 0x1) {
@@ -106,7 +107,6 @@ server.bind(PORT);
 // helper functions
 
 function sendGoodbyes() {
-  console.log("sending goodbyes!");
   for (var x of sessions.keys()) {
     // say goodbye
     respond(sessions.get(x), GOODBYE);
@@ -146,7 +146,7 @@ function handleData(sessions, pMessage) {
   console.log(pMessage["data"]);
 
   // now respond
-  respond(session, HELLO);
+  respond(session, ALIVE);
 }
 
 function handleAlive(sessions, pMessage) {
