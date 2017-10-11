@@ -68,14 +68,15 @@ rl.on('line', (input) => {
 
 // send goodbye on the close event
 rl.on('close', () => {
-  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
-  client.close();
+  sendGoodbye;
+  //messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
+  //client.close();
   //process.exit(0);
 });
 
 // on std input, send a data message to server
 //process.stdin.on('data', function (data) {
-//  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x1, data.slice(0,-1));
+//  messages.sendMessage(client;, PORT, HOST, seqNum, sesID, 0x1, data.slice(0,-1));
 //  seqNum++;  
 //  clearTimeout(timeout);
 //  timeout = setTimeout(sendGoodbye, 30000);
@@ -86,4 +87,5 @@ client.bind(33331);
 // Helper functions
 function sendGoodbye () {
   messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
+  client.close();
 }
