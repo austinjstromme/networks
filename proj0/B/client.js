@@ -1,13 +1,14 @@
 // non-hread based implementation of a P0P client
 
 // host and port give the location of the server
-var HOST = process.argv[2];
-//var HOST = '127.0.0.1';
-var PORT = process.argv[3];
-//var PORT = 33333;
+//var HOST = process.argv[2];
+var HOST = '127.0.0.1';
+//var PORT = process.argv[3];
+var PORT = 33333;
 
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
+var readline = require('readline');
 var messages = require('../utils/messages');
 
 // make our server
@@ -50,16 +51,34 @@ client.on('message', function (message, remote) {
   }
 })
 
-// on std input, send a data message to server
-process.stdin.on('data', function (data) {
-
-  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x1, data);
-  seqNum++;
-  
-  clearTimeout(timeout);
-  timeout = setTimeout(sendGoodbye, 30000);
-
+//create a read line interface
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
 });
+
+// send std input to the server
+rl.on('line', (input) => {
+    messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x1, input);
+    seqNum++;  
+    clearTimeout(timeout);
+    timeout = setTimeout(sendGoodbye, 30000);
+});
+
+// send goodbye on the close event
+rl.on('close', () => {
+  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
+  client.close();
+  //process.exit(0);
+});
+
+// on std input, send a data message to server
+//process.stdin.on('data', function (data) {
+//  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x1, data.slice(0,-1));
+//  seqNum++;  
+//  clearTimeout(timeout);
+//  timeout = setTimeout(sendGoodbye, 30000);
+//});
 
 client.bind(33331);
 
