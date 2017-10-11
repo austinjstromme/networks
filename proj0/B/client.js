@@ -35,12 +35,13 @@ client.on('listening', function () {
 
 });
 
+// handle incoming messages
 client.on('message', function (message, remote) {
   // process the message
   var pMessage = messages.processMessage(message);
   var command = pMessage["command"];
 
-  if (command == 0x0) { // on receiving HELLO. go to listening state
+  if (command == 0x0) { // on receiving HELLO, go to listening state
   	clearTimeout(timeout);
   	timeout = setTimeout(sendGoodbye, 3000000);
   } else if (command == 0x2) { // on reveiving ALIVE, go to listening state
@@ -67,14 +68,15 @@ rl.on('line', (input) => {
 
 // send goodbye on the close event
 rl.on('close', () => {
-  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
-  client.close();
+  sendGoodbye;
+  //messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
+  //client.close();
   //process.exit(0);
 });
 
 // on std input, send a data message to server
 //process.stdin.on('data', function (data) {
-//  messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x1, data.slice(0,-1));
+//  messages.sendMessage(client;, PORT, HOST, seqNum, sesID, 0x1, data.slice(0,-1));
 //  seqNum++;  
 //  clearTimeout(timeout);
 //  timeout = setTimeout(sendGoodbye, 30000);
@@ -84,6 +86,6 @@ client.bind(33331);
 
 // Helper functions
 function sendGoodbye () {
-  console.log("sending goodbyes!");
   messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
+  client.close();
 }
