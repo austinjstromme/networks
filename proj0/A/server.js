@@ -7,6 +7,7 @@ var PORT = process.argv[2];
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
 var messages = require('../utils/messages');
+var readline = require('readline');
 
 // make our server
 var server = dgram.createSocket('udp4');
@@ -25,8 +26,7 @@ var timeout = setTimeout(sendGoodbyes, 30000);
 
 server.on('listening', function () {
   var address = server.address();
-  console.log('Listening on ' + address.address + ':'
-    + address.port);
+  console.log('Waiting on port ' + address.port + '...');
 });
 
 server.on('message', function (message, remote) {
@@ -35,7 +35,7 @@ server.on('message', function (message, remote) {
 
   // clear the old timeout
   clearTimeout(timeout);
-  // send the new
+  // set the new timeout
   timeout = setTimeout(sendGoodbyes, 30000);
 
   // now process the message
@@ -68,7 +68,6 @@ server.on('message', function (message, remote) {
 
   // we expect dif == 1
   var dif = pMessage["seqNum"] - session["seqNum"];
-  console.log("dif == " + dif)
 
   if (dif == 1) {
     session["seqNum"] = pMessage["seqNum"];
@@ -83,7 +82,7 @@ server.on('message', function (message, remote) {
     return;
   }
 
-  // for each lost packet, print "lost packet\n"
+  // for each lost packet, print "lost packet"
   while (dif > 1) {
     dif--;
     console.log("lost packet");
@@ -102,7 +101,33 @@ server.on('message', function (message, remote) {
 
 });
 
+
 server.bind(PORT);
+
+// below we handle reading from stdin
+var closed = false;
+
+// this is nice
+var rl = readline.createInterface(process.stdin, process.stdout, null);
+
+rl.on('line', function(text) {
+  if (text == "q") {
+    if (!closed) {
+      server.close();
+      closed = true;
+    }
+    rl.close();
+  }
+});
+
+rl.on('close', function() {
+  // if we haven't closed the server, go ahead and close it up
+  if (!closed) {
+    server.close();
+  }
+  // exit out
+  process.exit(0);
+});
 
 // helper functions
 
@@ -133,6 +158,8 @@ function handleHello(sessions, pMessage, remote) {
 
   sessions.set(pMessage["sesID"], session);
 
+  console.log(session["sesID"] + ' [0] Session created')
+
   // now respond
   respond(session, HELLO);
 }
@@ -143,7 +170,8 @@ function handleData(sessions, pMessage) {
 
   session["time"] = getTime();
 
-  console.log(pMessage["data"]);
+  console.log(session["sesID"] + ' [' + session["seqNum"]
+    + '] ' + pMessage["data"]);
 
   // now respond
   respond(session, ALIVE);
@@ -160,9 +188,14 @@ function handleAlive(sessions, pMessage) {
 function handleGoodbye(sessions, pMessage) {
   // respond then delete
   var session = sessions.get(pMessage["sesID"]);
+  console.log(session["sesID"] + ' [' + session["seqNum"]
+    + '] GOODBYE from client')
+
   respond(session, GOODBYE);
 
   sessions.delete(pMessage["sesID"]);
+
+  console.log(session["sesID"] + ' Session closed')
 }
 
 // responds to session with response type type (defined above)
