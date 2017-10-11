@@ -69,9 +69,7 @@ server.on('message', function (message, remote) {
   // we expect dif == 1
   var dif = pMessage["seqNum"] - session["seqNum"];
 
-  if (dif == 1) {
-    session["seqNum"] = pMessage["seqNum"];
-  } else if (dif == 0) {
+  if (dif == 0) {
     // print duplicate packet and discard this one
     console.log("duplicate packet");
     return;
@@ -81,6 +79,8 @@ server.on('message', function (message, remote) {
     handleGoodbye(sessions, pMessage);
     return;
   }
+
+  session["seqNum"] = pMessage["seqNum"];
 
   // for each lost packet, print "lost packet"
   while (dif > 1) {
