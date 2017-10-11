@@ -35,12 +35,13 @@ client.on('listening', function () {
 
 });
 
+// handle incoming messages
 client.on('message', function (message, remote) {
   // process the message
   var pMessage = messages.processMessage(message);
   var command = pMessage["command"];
 
-  if (command == 0x0) { // on receiving HELLO. go to listening state
+  if (command == 0x0) { // on receiving HELLO, go to listening state
   	clearTimeout(timeout);
   	timeout = setTimeout(sendGoodbye, 3000000);
   } else if (command == 0x2) { // on reveiving ALIVE, go to listening state
@@ -84,6 +85,5 @@ client.bind(33331);
 
 // Helper functions
 function sendGoodbye () {
-  console.log("sending goodbyes!");
   messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
 }
