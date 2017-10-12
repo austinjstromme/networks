@@ -121,8 +121,8 @@ if __name__ == "__main__":
 
 		#get the command session id, sequence number
 		command = int(data[3])
-		ses_id = int(struct.unpack('>i', data[8:12])[0])
-		seq_num = int(struct.unpack('>i', data[4:8])[0])
+		ses_id = int(struct.unpack('>I', data[8:12])[0])
+		seq_num = int(struct.unpack('>I', data[4:8])[0])
 		message = data[12:].decode("ascii") #the rest of the message is the data
 
 		if ses_id in sessions:
@@ -179,4 +179,5 @@ if __name__ == "__main__":
 	send_goodbyes(sessions)
 	time.sleep(.5) #make sure all goodbyes send?
 	th.join()
-	#process.exit(1)
+
+	#process.exit(0)
