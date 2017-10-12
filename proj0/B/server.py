@@ -68,14 +68,19 @@ class thread(threading.Thread):
 		global state
 		while(state != 0):
 
-			line = sys.stdin.readline()
+			try:
+				line = sys.stdin.readline()
 
-			if not line: #eof
-				state = 0
-				continue
+				if not line: #eof
+					state = 0
+					continue
 
-			if line.replace("\n", "") == "q": #q entered by user
+				if line.replace("\n", "") == "q": #q entered by user
+					state = 0
+
+			except KeyboardInterrupt:
 				state = 0
+				break
 
 
 if __name__ == "__main__":
