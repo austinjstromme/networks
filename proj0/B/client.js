@@ -2,9 +2,7 @@
 
 // host and port give the location of the server
 var HOST = process.argv[2];
-//var HOST = '127.0.0.1';
 var PORT = process.argv[3];
-//var PORT = 33333;
 
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
@@ -52,6 +50,8 @@ client.on('message', function (message, remote) {
   }
 })
 
+client.bind(33331);
+
 //create a read line interface
 const rl = readline.createInterface({
   input: process.stdin,
@@ -71,7 +71,7 @@ rl.on('close', () => {
   sendGoodbye;
   //messages.sendMessage(client, PORT, HOST, seqNum, sesID, 0x3);
   //client.close();
-  //process.exit(0);
+  process.exit(0);
 });
 
 // on std input, send a data message to server
@@ -81,8 +81,6 @@ rl.on('close', () => {
 //  clearTimeout(timeout);
 //  timeout = setTimeout(sendGoodbye, 30000);
 //});
-
-client.bind(33331);
 
 // Helper functions
 function sendGoodbye () {
