@@ -104,29 +104,19 @@ server.on('message', function (message, remote) {
 
 server.bind(PORT);
 
-// below we handle reading from stdin
-var closed = false;
-
 // this is nice
 var rl = readline.createInterface(process.stdin, process.stdout, null);
 
 rl.on('line', function(text) {
   if (text == "q") {
-    if (!closed) {
-      server.close();
-      closed = true;
-    }
     rl.close();
   }
 });
 
 rl.on('close', function() {
-  // if we haven't closed the server, go ahead and close it up
-  if (!closed) {
-    server.close();
-  }
-  // exit out
-  process.exit(0);
+  // send goodbyes, then close after they've actually been sent
+  sendGoodbyes();
+  setTimeout(function() { server.close(); process.exit(0); }, 20);
 });
 
 // helper functions
