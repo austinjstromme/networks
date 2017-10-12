@@ -49,7 +49,6 @@ server.on('message', function (message, remote) {
 
   // now handle it
   if (command == 0x0) {
-    console.log("we got a hello!")
     handleHello(sessions, pMessage, remote);
     return;
   }
