@@ -69,6 +69,10 @@ class thread(threading.Thread):
 		while(state != 0):
 
 			try:
+				ready = select.select([sys.stdin], [], [], 1)
+				if not ready[0]:
+ 					continue
+
 				line = sys.stdin.readline()
 
 				if not line: #eof
@@ -84,7 +88,6 @@ class thread(threading.Thread):
 
 
 if __name__ == "__main__":
-
 	HOST = "0.0.0.0"
 	PORT = int(sys.argv[1])
 
@@ -104,11 +107,16 @@ if __name__ == "__main__":
 
 	#listen for messages on the socket
 	while state == 1:
-		
+
 		cull(sessions) #remove old sessions
 
 		#if no message is received after 1 second do the loop again
-		ready = select.select([listening], [], [], 1)
+		try:
+			ready = select.select([listening], [], [], 1)
+		except KeyboardInterrupt:
+			state = 0
+			break
+      
 		if not ready[0]:
 			continue
 
