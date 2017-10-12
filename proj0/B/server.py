@@ -54,11 +54,10 @@ def send_goodbyes(sessions):
 
 #remove all sessions that have been inactive for at least 30 seconds
 def cull(sessions):
-	for ses_id in sessions:
+	for ses_id in list(sessions.keys()): #make a copy of the list of keys so we can remove them dynamically
 		if time.time() - sessions[ses_id].last_seen >= 30:
 			sendMessage(listening, sessions[ses_id].addr[1], sessions[ses_id].addr[0], server_seq_num, ses_id, GOODBYE)
 			del sessions[ses_id]
-
 
 class thread(threading.Thread):
 
