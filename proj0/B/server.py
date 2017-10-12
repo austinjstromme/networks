@@ -45,7 +45,7 @@ def sendMessage(socket, clientPort, clientAddress, seqNum, sesID, command, data 
 		# append data
 		message = message + data
 	# now send the message
-	socket.sendto(message.encode('utf-8'), (clientAddress, clientPort))
+	socket.sendto(message, (clientAddress, clientPort))
 
 #sends goodbyes to all sessions
 def send_goodbyes(sessions):
