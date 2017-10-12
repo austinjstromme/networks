@@ -47,12 +47,12 @@ client.on('message', function (message, remote) {
   	clearTimeout(timeout);
   	timeout = setTimeout(sendGoodbye, 3000000);
   } else if (command == 0x3) { // on reveiving GOODBYE, close the client
-  	client.close();
+  	sendGoodbye();
+    setTimeout(client.close, 300);
   }
 });
 
 client.on('close', function () {
-  sendGoodbye();
   process.exit(0);
 });
 
@@ -74,7 +74,8 @@ rl.on('line', (input) => {
 
 // send goodbye on the close event
 rl.on('close', () => {
-  client.close();
+  sendGoodbye();
+  setTimeout(client.close, 300);
 });
 
 // on std input, send a data message to server
