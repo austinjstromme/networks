@@ -21,6 +21,7 @@ var seqNum = 0;
 // after 30 seconds of no activity send GOODBYE and close
 var timeout = setTimeout(sendGoodbye, 3000000);
 var nohello = true;
+var clientClosed = false;
 
 // listen for messages from server
 client.on('listening', function () {
@@ -47,7 +48,6 @@ client.on('message', function (message, remote) {
   	clearTimeout(timeout);
   	timeout = setTimeout(sendGoodbye, 3000000);
   } else if (command == 0x3) { // on reveiving GOODBYE, close the client
-    sendGoodbye();
     client.close();
   }
 });
@@ -74,8 +74,9 @@ rl.on('line', (input) => {
 
 // send goodbye on the close event
 rl.on('close', () => {
+  //console.log("rl is closing");
   sendGoodbye();
-  client.close();
+  setTimeout(client.close, 30000);
 });
 
 // on std input, send a data message to server
