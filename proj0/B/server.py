@@ -149,17 +149,18 @@ if __name__ == "__main__":
 					continue #print duplicate packet and move on
 
 				elif diff >= 0: #expected number arived
+					
+					while diff > 0:
+						print("lost packet")
+						diff -= 1
+
+					print("{} [{}] {}".format(sessions[ses_id].ses_id, sessions[ses_id].seq_num, message))
+
 					sessions[ses_id].seq_num += (1 + diff)
 
 				elif diff < -1: #stored ses_id is greater than received one. Something is wrong, send goodbye.
 					sendMessage(listening, sessions[ses_id].addr[1], sessions[ses_id].addr[0], server_seq_num, ses_id, GOODBYE)
 					server_seq_num += 1
-
-				while diff > 0:
-					print("lost packet")
-					diff -= 1
-
-				print("{} [{}] {}".format(sessions[ses_id].ses_id, sessions[ses_id].seq_num, message))
 
 				#send back an alive message
 				sendMessage(listening, sessions[ses_id].addr[1], sessions[ses_id].addr[0], server_seq_num, ses_id, ALIVE)
