@@ -104,6 +104,8 @@ if __name__ == "__main__":
 
 	#listen for messages on the socket
 	while state == 1:
+		
+		cull(sessions) #remove old sessions
 
 		#if no message is received after 1 second do the loop again
 		ready = select.select([listening], [], [], 1)
@@ -127,8 +129,6 @@ if __name__ == "__main__":
 
 		if ses_id in sessions:
 			sessions[ses_id].last_seen = time.time()
-
-		cull(sessions) #remove old sessions
 
 		if command == 0: #received a hello
 			if ses_id not in sessions:
