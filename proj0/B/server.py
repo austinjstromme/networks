@@ -125,7 +125,7 @@ if __name__ == "__main__":
 		command = int(data[3])
 		ses_id = int(struct.unpack('>I', data[8:12])[0])
 		seq_num = int(struct.unpack('>I', data[4:8])[0])
-		message = string(data[12:]) #the rest of the message is the data
+		message = str(data[12:]) #the rest of the message is the data
 
 		if ses_id in sessions:
 			sessions[ses_id].last_seen = time.time()
