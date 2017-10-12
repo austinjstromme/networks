@@ -47,12 +47,12 @@ client.on('message', function (message, remote) {
   	clearTimeout(timeout);
   	timeout = setTimeout(sendGoodbye, 3000000);
   } else if (command == 0x3) { // on reveiving GOODBYE, close the client
-    sendGoodbye();
   	client.close();
   }
 });
 
 client.on('close', function () {
+  sendGoodbye();
   process.exit(0);
 });
 
