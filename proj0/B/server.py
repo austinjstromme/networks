@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
 				elif diff >= 0: #expected number arived
 					
-					while diff > 0:
+					while diff > 1:
 						print("lost packet")
 						diff -= 1
 
