@@ -121,9 +121,9 @@ if __name__ == "__main__":
 
 		#get the command session id, sequence number
 		command = int(data[3])
-		ses_id = int(struct.unpack('I', data[8:12])[0])
-		seq_num = int(struct.unpack('I', data[4:8])[0])
-		message = data[12:].decode("utf-8") #the rest of the message is the data
+		ses_id = int(struct.unpack('>i', data[8:12])[0])
+		seq_num = int(struct.unpack('>i', data[4:8])[0])
+		message = data[12:].decode("ascii") #the rest of the message is the data
 
 		if ses_id in sessions:
 			sessions[ses_id].last_seen = time.time()
@@ -144,10 +144,6 @@ if __name__ == "__main__":
 			if ses_id in sessions:
 				diff = int(seq_num) - int(sessions[ses_id].seq_num)
 				
-				print(seq_num)
-				print(sessions[ses_id].seq_num)
-				print(diff)
-
 				if diff == -1:
 					print("duplicate packet")
 					continue #print duplicate packet and move on
@@ -159,9 +155,9 @@ if __name__ == "__main__":
 					sendMessage(listening, sessions[ses_id].addr[1], sessions[ses_id].addr[0], server_seq_num, ses_id, GOODBYE)
 					server_seq_num += 1
 
-				#while diff > 0:
-				#	print("lost packet")
-				#	diff -= 1
+				while diff > 0:
+					print("lost packet")
+					diff -= 1
 
 				print("{} [{}] {}".format(sessions[ses_id].ses_id, sessions[ses_id].seq_num, message))
 
@@ -178,6 +174,7 @@ if __name__ == "__main__":
 				sendMessage(listening, sessions[ses_id].addr[1], sessions[ses_id].addr[0], server_seq_num, ses_id, GOODBYE)
 				server_seq_num += 1
 				del sessions[ses_id] #remove the session from active sessions
+				print("{} session closed".format(ses_id))
 
 	send_goodbyes(sessions)
 	time.sleep(.5) #make sure all goodbyes send?
