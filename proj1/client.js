@@ -1,4 +1,4 @@
-// Reggistration Client
+// Registration Client
 
 // import dgram which offers support for UDP on node
 var dgram = require('dgram');
@@ -9,11 +9,13 @@ var messages = require('./messages');
 REG_HOST = 'cse461.cs.washington.edu';
 REG_PORT = 46101;
 
+// port that this registration client will be sending on. PORT + 1 will also be used for listening.
 PORT = process.argv[2];
 
 var seqNum = 0;
 
 // This state variable determines what message we are hoping to see at this moment.
+
 // 0 means we want an ACK
 // 1 means we want an Unregistered message
 // 2 means we want a FetchResponse message
@@ -25,12 +27,12 @@ var client_listener = dgram.createSocket('udp4');
 
 // listen for messages from registration service. Basically just responds to ACKS
 client_listener.on('listening', function () {
-  var address = client_listener.address();
+  var address = client_listener.address(); //where is this used?
 });
 
 // listen for messages from registration service. Listens for response messages
 client_sender.on('listening', function () {
-  var address = client_sender.address();
+  var address = client_sender.address(); //where is this used?
 });
 
 client_listener.on('message', function (message, remote) {

@@ -17,8 +17,21 @@ exports.processMessage = function(message) {
 
   if (pMessage["command"] == 2) { //Registered message
   	pMessage["lifetime"] = [message[4], message[5]];
+
   } else if (pMessage["command"] == 4) { //FetchResponse
-  	pMessage["entries"] = []; //make a list? Fill it with the entries?
+  	pMessage["numEntries"] = message[4];
+  	pMessage["entries"] = []; //list to hold all returned nodes
+  	
+  	for (var i = 0; i < pMessage["numEntries"]; i = i+10){
+
+  	  var entries = new Map();
+  	  entries.set("IP", message.slice(5+i*10, 9+i*10)); //4 bytes
+  	  entries.set("port", message.slice(9+i*10, 11+i*10)); //2 bytes
+  	  entries.set("data", message.slice(11+i*10, 15+i*10)); //4 bytes
+
+  	  pMessage["entries"].push(entries); 
+  	}
+  	
   }
 
   return pMessage;
