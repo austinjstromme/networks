@@ -5,7 +5,7 @@ exports.processMessage = function(message) {
   var pMessage = {};
   pMessage["valid"] = false;
 
-  if (message[0] != 0xC4 || message[1] != 0x61) { //I think this checks the magic number?
+  if (message[0] != 0xC4 || message[1] != 0x61) {
     // invalid
     return pMessage;
   }
