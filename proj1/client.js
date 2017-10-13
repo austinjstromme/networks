@@ -13,35 +13,47 @@ PORT = process.argv[2];
 
 var seqNum = 0;
 
+// This state variable determines what message we are hoping to see at this moment.
+// 0 means we want an ACK
+// 1 means we want an Unregistered message
+// 2 means we want a FetchResponse message
+var state = 0;
+
 // make our sockets which will be bound to p and p+1
 var client_sender = dgram.createSocket('udp4');
 var client_listener = dgram.createSocket('udp4');
 
-// listen for messages from registration service. Listens for response messages
-client_sender.on('listening', function () {
-  var address = client_sender.address();
-  //console.log('Sender waiting on port ' + address.port + '...');
-});
-
 // listen for messages from registration service. Basically just responds to ACKS
 client_listener.on('listening', function () {
   var address = client_listener.address();
-  //console.log('Listener waiting on port ' + address.port + '...');
 });
 
-client_sender.on('message', function (message, remote) {
-	//need to print to console depending on what state we're in.
-	console.log(message);
+// listen for messages from registration service. Listens for response messages
+client_sender.on('listening', function () {
+  var address = client_sender.address();
 });
 
 client_listener.on('message', function (message, remote) {
-	//need to  process message and send back an ACK if it is a probe
+	//need to process message and send back an ACK if it is a probe
 	pMessage = messages.processMessage(message);
 	if (pMessage["command"] == 7) {
 		messages.sendACK(client_listener, REG_PORT, REG_HOST, seqNum);
 		seqNum++; //increase seqNum here?
 	}
 
+});
+
+client_sender.on('message', function (message, remote) {
+	//need to print to console depending on what state we're in.
+	pMessage = messages.processMessage(message);
+
+	if (pMessage["command"] == 7) {
+		if (state == 0) {
+			console.log("Success");
+		}
+	}
+	
+	console.log(message);
 });
 
 // create a read line interface
@@ -76,7 +88,7 @@ rl.on('line', function(text) {
   	seqNum++;
   
   } else if (ln[0] == "p") { //send Probe
-  
+
   	messages.sendProbe(client_sender, REG_PORT, REG_HOST, seqNum);
   	seqNum++;
 

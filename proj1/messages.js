@@ -16,7 +16,7 @@ exports.processMessage = function(message) {
   pMessage["command"] = message[3];
 
   if (pMessage["command"] == 2) { //Registered message
-  	pMessage["lifetime"] = message[4:6];
+  	pMessage["lifetime"] = [message[4], message[5]];
   } else if (pMessage["command"] == 4) { //FetchResponse
   	pMessage["entries"] = []; //make a list? Fill it with the entries?
   }
