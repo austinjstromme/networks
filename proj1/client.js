@@ -31,6 +31,7 @@ const rl = readline.createInterface({
 
 //check the input
 rl.on('line', (input) => {
+	
 });
 
 client_sender.bind(PORT);
