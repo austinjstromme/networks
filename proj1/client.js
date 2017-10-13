@@ -51,9 +51,15 @@ client_sender.on('message', function (message, remote) {
 		if (state == 0) {
 			console.log("Success");
 		}
+	} else if (pMessage["command"] == 5) { //unregister
+		if (state == 2) {
+			console.log("Success");
+		}
+	} else if (pMessage["command"] == 4) { //fetch response
+		if (state == 2) {
+			console.log("Success");
+		}
 	}
-	
-	console.log(message);
 });
 
 // create a read line interface
@@ -72,28 +78,40 @@ rl.on('line', function(text) {
     data = ln[2];
     serviceName = ln[3];
     serviceIP = client_sender.address.address;
+    state = 1;
     messages.sendRegister(client_sender, REG_PORT, REG_HOST, seqNum, IP, portNum, data, serviceName);
     seqNum++;
 
   } else if (ln[0] == "u") { //send Unregister
   	
+  	if (ln.length != 2) {
+  		console.log("Please provide portNum");
+  	}
+
   	portNum = ln[1];
+  	state = 0;
   	messages.sendUnregister(client_sender, REG_PORT, REG_HOST, seqNum, portNum);
   	seqNum++;
 
   } else if (ln[0] == "f") { //send fetch
-  	
+
+  	if (ln.length != 2) {
+  		console.log("Please provide serviceName prefix");
+  	}
+
   	serviceNamePrefix = ln[1];
+  	state = 2;
   	messages.sendFetch(client_sender, REG_PORT, REG_HOST, seqNum, serviceNamePrefix);
   	seqNum++;
   
   } else if (ln[0] == "p") { //send Probe
 
+  	state = 0;
   	messages.sendProbe(client_sender, REG_PORT, REG_HOST, seqNum);
   	seqNum++;
 
   } else if (ln[0] == "q") { //quit
-  	
+
     //do we need to unregister first?
   	process.exit(0);
   
