@@ -1,6 +1,7 @@
-//
+// Basic messages to be used in registration protocol.
 
-//
+// process any message of type Registered, FetchResponse, probe, or ACK.
+// returned result will depend on what message is receivec.
 exports.processMessage = function(message) {
   var pMessage = {};
   pMessage["valid"] = false;
@@ -11,12 +12,19 @@ exports.processMessage = function(message) {
   }
 
   pMessage["valid"] = true;
+  pMessage["seqNum"] = message[2];
+  pMessage["command"] = message[3];
 
-  pMessage["command"] = message[2];
+  if (pMessage["command"] == 2) { //Registered message
+  	pMessage["lifetime"] = message[4:6];
+  } else if (pMessage["command"] == 4) { //FetchResponse
+  	pMessage["entries"] = []; //make a list? Fill it with the entries?
+  }
 
+  return pMessage;
 };
 
-//
+// send a register message 
 exports.sendRegister = function(socket, clientPort,
   clientAddress, seqNum, serviceIP, servicePort, 
   serviceData, serviceName) {
@@ -42,7 +50,7 @@ exports.sendRegister = function(socket, clientPort,
   });
 };
 
-//
+// send an unregister message to unregister the servicePort
 exports.sendUnregister = function(socket, clientPort,
   clientAddress, seqNum, serviceIP, servicePort) {
 
@@ -62,7 +70,7 @@ exports.sendUnregister = function(socket, clientPort,
   });
 };
 
-//
+// send a fetch message to get all registered nodes with serviceName as a prefix
 exports.sendFetch = function(socket, clientPort,
   clientAddress, seqNum, serviceName) {
 
@@ -84,7 +92,7 @@ exports.sendFetch = function(socket, clientPort,
   });
 };
 
-//
+// send a probe message
 exports.sendProbe = function(socket, clientPort,
   clientAddress, seqNum) {
 
@@ -102,7 +110,7 @@ exports.sendProbe = function(socket, clientPort,
   });
 };
 
-//
+// send an ACK message
 exports.sendACK = function(socket, clientPort,
   clientAddress, seqNum) {
 
