@@ -65,17 +65,18 @@ client_sender.on('message', function (message, remote) {
 				console.log("[" + i + "] " + pMessage["entries"][i].get("IP") + " " + 
 					pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
 			}
-			//console.log("Success");
 		}
 	}
+	rl.prompt(); // print the prompt again once we get a message back.
 });
 
 // create a read line interface
 var rl = readline.createInterface(process.stdin, process.stdout, null);
 
+rl.setPrompt('Enter r(egister), u(nregister), f(etch), p(robe), or q(uit): ');
+rl.prompt();
+
 rl.on('line', function(text) {
-  
-  //console.log("Enter r(egister), u(nregister), f(etch), p(robe), or q(uit): \n");
   
   ln = text.split(" ")
 
@@ -127,9 +128,10 @@ rl.on('line', function(text) {
   	process.exit(0);
   
   } else {
-  
+
   	console.log("not a valid command!");
   }
+
 });
 
 client_sender.bind(parseInt(PORT));
