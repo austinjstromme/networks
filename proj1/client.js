@@ -39,6 +39,7 @@ client_listener.on('message', function (message, remote) {
 	//need to process message and send back an ACK if it is a probe
 	pMessage = messages.processMessage(message);
 	if (pMessage["command"] == 7) {
+		console.log("I've been probed!")
 		messages.sendACK(client_listener, REG_PORT, REG_HOST, seqNum);
 		seqNum++; //increase seqNum here?
 	}
@@ -51,7 +52,7 @@ client_sender.on('message', function (message, remote) {
 
 	if (pMessage["command"] == 7) { //ACK
 		if (state == 0) {
-			console.log("Success");
+			console.log("Success: received ACK");
 		}
 	}else if (pMessage["command"] == 2) { //Registered
 		if (state == 1) {

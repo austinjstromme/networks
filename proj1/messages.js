@@ -16,7 +16,9 @@ exports.processMessage = function(message) {
   pMessage["command"] = message[3];
 
   if (pMessage["command"] == 2) { //Registered message
-  	pMessage["lifetime"] = [message[4], message[5]];
+
+  	//we want bytes 4 and 5 here but the lifetime currently fits just in byte 5
+  	pMessage["lifetime"] = message.readUInt16BE(4);
 
   } else if (pMessage["command"] == 4) { //FetchResponse
   	pMessage["numEntries"] = message[4];
