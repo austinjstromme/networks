@@ -17,7 +17,7 @@ var seqNum = 0;
 // This state variable determines what message we are hoping to see at this moment.
 
 // 0 means we want an ACK
-// 1 means we want an Unregistered message
+// 1 means we want an Registered message
 // 2 means we want a FetchResponse message
 var state = 0;
 
@@ -49,17 +49,22 @@ client_sender.on('message', function (message, remote) {
 	//need to print to console depending on what state we're in.
 	pMessage = messages.processMessage(message);
 
-	if (pMessage["command"] == 7) {
+	if (pMessage["command"] == 7) { //ACK
 		if (state == 0) {
 			console.log("Success");
 		}
-	} else if (pMessage["command"] == 5) { //unregister
-		if (state == 2) {
-			console.log("Success");
+	}else if (pMessage["command"] == 2) { //Registered
+		if (state == 1) {
+			console.log("Successful: lifetime = " + pMessage["lifetime"]);
 		}
 	} else if (pMessage["command"] == 4) { //fetch response
 		if (state == 2) {
-			console.log("Success");
+
+			for (i=0; i < pMessage["numEntries"]; i++) {
+				console.log("[" + i + "] " + pMessage["entries"][i].get("IP") + " " + 
+					pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
+			}
+			//console.log("Success");
 		}
 	}
 });
@@ -68,6 +73,9 @@ client_sender.on('message', function (message, remote) {
 var rl = readline.createInterface(process.stdin, process.stdout, null);
 
 rl.on('line', function(text) {
+  
+  //console.log("Enter r(egister), u(nregister), f(etch), p(robe), or q(uit): \n");
+  
   ln = text.split(" ")
 
   if (ln[0] == "r") { //send register
@@ -81,7 +89,7 @@ rl.on('line', function(text) {
     serviceName = ln[3];
     serviceIP = client_sender.address.address;
     state = 1;
-    messages.sendRegister(client_sender, REG_PORT, REG_HOST, seqNum, IP, portNum, data, serviceName);
+    messages.sendRegister(client_sender, REG_PORT, REG_HOST, seqNum, serviceIP, portNum, data, serviceName);
     seqNum++;
 
   } else if (ln[0] == "u") { //send Unregister
