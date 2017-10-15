@@ -35,6 +35,7 @@ client_sender.on('listening', function () {
   var address = client_sender.address(); //where is this used?
 });
 
+//
 client_listener.on('message', function (message, remote) {
 	//need to process message and send back an ACK if it is a probe
 	pMessage = messages.processMessage(message);
@@ -107,11 +108,13 @@ rl.on('line', function(text) {
 
   } else if (ln[0] == "f") { //send fetch
 
-  	if (ln.length != 2) {
-  		console.log("Please provide serviceName prefix");
+  	if (ln.length == 2) {
+  		serviceNamePrefix = ln[1];
+  	} else {
+  		serviceNamePrefix = "";
   	}
 
-  	serviceNamePrefix = ln[1];
+  	
   	state = 2;
   	messages.sendFetch(client_sender, REG_PORT, REG_HOST, seqNum, serviceNamePrefix);
   	seqNum++;
