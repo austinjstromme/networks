@@ -24,12 +24,12 @@ exports.processMessage = function(message) {
   	pMessage["numEntries"] = message[4];
   	pMessage["entries"] = []; //list to hold all returned nodes
   	
-  	for (var i = 0; i < pMessage["numEntries"]; i = i+10){
+  	for (var i = 0; i < pMessage["numEntries"]; i++){
 
   	  var entries = new Map();
-  	  entries.set("IP", message.readUInt32BE(5+i*10)); //4 bytes
-  	  entries.set("port", message.readUInt16BE(9+i*10)); //2 bytes
-  	  entries.set("data", message.readUInt32BE(11+i*10)); //4 bytes
+  	  entries.set("IP", message.readUInt32BE(5+(i*10))); //4 bytes
+  	  entries.set("port", message.readUInt16BE(9+(i*10))); //2 bytes
+  	  entries.set("data", message.readUInt32BE(11+(i*10))); //4 bytes
 
   	  pMessage["entries"].push(entries); 
   	}

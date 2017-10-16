@@ -63,7 +63,7 @@ client_sender.on('message', function (message, remote) {
 		if (state == 2) {
 
 			for (i=0; i < pMessage["numEntries"]; i++) {
-				console.log("[" + i + "] " + pMessage["entries"][i].get("IP") + " " + 
+				console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " " + 
 					pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
 			}
 		}
@@ -113,8 +113,7 @@ rl.on('line', function(text) {
   	} else {
   		serviceNamePrefix = "";
   	}
-
-  	
+  	  	
   	state = 2;
   	messages.sendFetch(client_sender, REG_PORT, REG_HOST, seqNum, serviceNamePrefix);
   	seqNum++;
@@ -133,6 +132,8 @@ rl.on('line', function(text) {
   } else {
 
   	console.log("not a valid command!");
+  	rl.prompt();
+
   }
 
 });
