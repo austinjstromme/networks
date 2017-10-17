@@ -63,6 +63,7 @@ client_sender.on('message', function (message, remote) {
 		if (state == 2) {
 
 			for (i=0; i < pMessage["numEntries"]; i++) {
+
 				console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " " + 
 					pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
 			}
@@ -90,7 +91,8 @@ rl.on('line', function(text) {
     portNum = ln[1];
     data = ln[2];
     serviceName = ln[3];
-    serviceIP = client_sender.address.address;
+    serviceIP = client_sender.address.address; //this is wrong
+    console.log(serviceIP);
     state = 1;
     messages.sendRegister(client_sender, REG_PORT, REG_HOST, seqNum, serviceIP, portNum, data, serviceName);
     seqNum++;
