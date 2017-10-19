@@ -1,6 +1,7 @@
 // Registration Client
 
 // import dgram which offers support for UDP on node
+var ip = require('ip')
 var dgram = require('dgram');
 var readline = require('readline');
 var messages = require('./messages');
@@ -18,7 +19,7 @@ var seqNum = 0;
 
 // 0 means we want an ACK
 // 1 means we want an Registered message
-// 2 means we want a FetchResponse message
+// 3 means we want a FetchResponse message
 var state = 0;
 
 // make our sockets which will be bound to p and p+1
@@ -91,7 +92,7 @@ rl.on('line', function(text) {
     portNum = ln[1];
     data = ln[2];
     serviceName = ln[3];
-    serviceIP = client_sender.address.address; //this is wrong
+    serviceIP = ip.address();
     console.log(serviceIP);
     state = 1;
     messages.sendRegister(client_sender, REG_PORT, REG_HOST, seqNum, serviceIP, portNum, data, serviceName);
