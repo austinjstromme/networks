@@ -15,12 +15,24 @@ PORT = process.argv[2];
 
 var seqNum = 0;
 
+// global message types
+var REG = 1;
+var REGED = 2;
+var FETCH = 3;
+var FETCHRESPONSE = 4;
+var UNREG = 5;
+var PROBE = 6;
+var ACK = 7;
+
+
 // This state variable determines what message we are hoping to see at this moment.
 
 // 0 means we want an ACK
 // 1 means we want an Registered message
-// 3 means we want a FetchResponse message
+// 2 means we want a FetchResponse message
+// 3 means we're not waiting for anything
 var state = 0;
+var timeout;
 
 // make our sockets which will be bound to p and p+1
 var client_sender = dgram.createSocket('udp4');
@@ -38,11 +50,14 @@ client_sender.on('listening', function () {
 
 //
 client_listener.on('message', function (message, remote) {
-	//need to process message and send back an ACK if it is a probe
+	// need to process message and send back an ACK if it is a probe
 	pMessage = messages.processMessage(message);
-	if (pMessage["command"] == 7) {
-		console.log("I've been probed!")
-		messages.sendACK(client_listener, REG_PORT, REG_HOST, seqNum);
+	if (pMessage["command"] == PROBE) {
+		console.log("I've been probed!");
+    // make an ack and send it off
+    var ack = messages.makeAck(seqNum);
+    messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
+    rl.prompt();
 		seqNum++; //increase seqNum here?
 	}
 
@@ -52,15 +67,17 @@ client_sender.on('message', function (message, remote) {
 	//need to print to console depending on what state we're in.
 	pMessage = messages.processMessage(message);
 
-	if (pMessage["command"] == 7) { //ACK
+	if (pMessage["command"] == ACK) { //ACK
 		if (state == 0) {
 			console.log("Success: received ACK");
+      state = 3;
 		}
-	}else if (pMessage["command"] == 2) { //Registered
+	}else if (pMessage["command"] == REGED) { //Registered
 		if (state == 1) {
 			console.log("Successful: lifetime = " + pMessage["lifetime"]);
+      state = 3;
 		}
-	} else if (pMessage["command"] == 4) { //fetch response
+	} else if (pMessage["command"] == FETCHRESPONSE) { //fetch response
 		if (state == 2) {
 
 			for (i=0; i < pMessage["numEntries"]; i++) {
@@ -68,6 +85,8 @@ client_sender.on('message', function (message, remote) {
 				console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " " + 
 					pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
 			}
+
+      state = 3;
 		}
 	}
 	rl.prompt(); // print the prompt again once we get a message back.
@@ -93,20 +112,21 @@ rl.on('line', function(text) {
     data = ln[2];
     serviceName = ln[3];
     serviceIP = ip.address();
-    console.log(serviceIP);
     state = 1;
-    messages.sendRegister(client_sender, REG_PORT, REG_HOST, seqNum, serviceIP, portNum, data, serviceName);
+    var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
+    messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
     seqNum++;
-
   } else if (ln[0] == "u") { //send Unregister
-  	
   	if (ln.length != 2) {
   		console.log("Please provide portNum");
+      rl.prompt();
+      return;
   	}
 
   	portNum = ln[1];
   	state = 0;
-  	messages.sendUnregister(client_sender, REG_PORT, REG_HOST, seqNum, portNum);
+    var unreg = messages.makeUnregister(seqNum, portNum);
+  	messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
   	seqNum++;
 
   } else if (ln[0] == "f") { //send fetch
@@ -118,13 +138,15 @@ rl.on('line', function(text) {
   	}
   	  	
   	state = 2;
-  	messages.sendFetch(client_sender, REG_PORT, REG_HOST, seqNum, serviceNamePrefix);
+    var fetch = messages.makeFetch(seqNum, serviceNamePrefix);
+    messages.sendMessage(client_sender, REG_PORT, REG_HOST, fetch);
   	seqNum++;
   
   } else if (ln[0] == "p") { //send Probe
-
   	state = 0;
-  	messages.sendProbe(client_sender, REG_PORT, REG_HOST, seqNum);
+
+    var probe = messages.makeProbe(seqNum);
+    messages.sendMessage(client_sender, REG_PORT, REG_HOST, probe);
   	seqNum++;
 
   } else if (ln[0] == "q") { //quit
@@ -143,3 +165,13 @@ rl.on('line', function(text) {
 
 client_sender.bind(parseInt(PORT));
 client_listener.bind(parseInt(PORT) + 1);
+
+function checkForResponse(cmd, tries) {
+  if (cmd == ACK) {
+    if (state == 0 && tries < 3) {
+      // we haven't gotten an ACK; send another
+      // resend
+    }
+  }
+}
+

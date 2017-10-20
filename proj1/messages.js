@@ -1,4 +1,5 @@
 // Basic messages to be used in registration protocol.
+var ip = require('ip')
 
 // process any message of type Registered, FetchResponse, probe, or ACK.
 // returned result will depend on what message is receivec.
@@ -25,9 +26,8 @@ exports.processMessage = function(message) {
   	pMessage["entries"] = []; //list to hold all returned nodes
   	
   	for (var i = 0; i < pMessage["numEntries"]; i++){
-
   	  var entries = new Map();
-  	  entries.set("IP", message.readUInt32BE(5+(i*10))); //4 bytes
+  	  entries.set("IP", ip.toString(message, 5 + (i*10), 4));
   	  entries.set("port", message.readUInt16BE(9+(i*10))); //2 bytes
   	  entries.set("data", message.readUInt32BE(11+(i*10))); //4 bytes
 
@@ -40,15 +40,15 @@ exports.processMessage = function(message) {
 };
 
 // send a register message 
-exports.sendRegister = function(socket, clientPort,
-  clientAddress, seqNum, serviceIP, servicePort, 
+exports.makeRegister = function(seqNum, serviceIP, servicePort, 
   serviceData, serviceName) {
 
   var message = Buffer.allocUnsafe(15 + serviceName.length);
   message.writeUInt16BE(50273, 0);
   message.writeUInt8(seqNum, 2);
   message.writeUInt8(1, 3); //register
-  message.writeUInt32BE(serviceIP, 4); //service IP
+  //message.writeUInt32BE(serviceIP, 4); //service IP
+  ip.toBuffer(ip.address(), message, 4); // write IP using IP package
   message.writeUInt16BE(servicePort, 8); //service port
   message.writeUInt32BE(serviceData, 10); //service data
   message.writeUInt8(serviceName.length, 14); //service name len
@@ -56,18 +56,11 @@ exports.sendRegister = function(socket, clientPort,
   //write out the serviceName on the end
   message.write(serviceName.toString('ascii'), 15);
 
-  // send the message over socket
-  socket.send(message, 0, message.length, clientPort,
-    clientAddress, function (err, bytes) {
-    if (err) {
-      throw err;
-    }
-  });
+  return message;
 };
 
 // send an unregister message to unregister the servicePort
-exports.sendUnregister = function(socket, clientPort,
-  clientAddress, seqNum, serviceIP, servicePort) {
+exports.makeUnregister = function(seqNum, serviceIP, servicePort) {
 
   var message = Buffer.allocUnsafe(10);
   message.writeUInt16BE(50273, 0);
@@ -76,18 +69,11 @@ exports.sendUnregister = function(socket, clientPort,
   message.writeUInt32BE(serviceIP, 4);//serviceIP
   message.writeUInt16BE(servicePort, 8)//servicePort
 
-  // send the message over socket
-  socket.send(message, 0, message.length, clientPort,
-    clientAddress, function (err, bytes) {
-    if (err) {
-      throw err;
-    }
-  });
+  return message;
 };
 
 // send a fetch message to get all registered nodes with serviceName as a prefix
-exports.sendFetch = function(socket, clientPort,
-  clientAddress, seqNum, serviceName) {
+exports.makeFetch = function(seqNum, serviceName) {
 
   var message = Buffer.allocUnsafe(5 + serviceName.length);
   message.writeUInt16BE(50273, 0);
@@ -98,25 +84,34 @@ exports.sendFetch = function(socket, clientPort,
   //write out the serviceName on the end
   message.write(serviceName.toString('ascii'), 5);
 
-  // send the message over socket
-  socket.send(message, 0, message.length, clientPort,
-    clientAddress, function (err, bytes) {
-    if (err) {
-      throw err;
-    }
-  });
+  return message;
 };
 
 // send a probe message
-exports.sendProbe = function(socket, clientPort,
-  clientAddress, seqNum) {
+exports.makeProbe = function(seqNum) {
 
   var message = Buffer.allocUnsafe(4);
   message.writeUInt16BE(50273, 0);
   message.writeUInt8(seqNum, 2);
   message.writeUInt8(6, 3); //Probe
 
-  // send the message over socket
+  return message;
+};
+
+// make a probe message
+exports.makeAck = function(seqNum) {
+
+  var message = Buffer.allocUnsafe(4);
+  message.writeUInt16BE(50273, 0);
+  message.writeUInt8(seqNum, 2);
+  message.writeUInt8(7, 3); //Ack
+
+  return message;
+};
+
+exports.sendMessage = function(socket, clientPort, clientAddress,
+  message) {
+
   socket.send(message, 0, message.length, clientPort,
     clientAddress, function (err, bytes) {
     if (err) {
@@ -126,19 +121,102 @@ exports.sendProbe = function(socket, clientPort,
 };
 
 // send an ACK message
-exports.sendACK = function(socket, clientPort,
-  clientAddress, seqNum) {
-
-  var message = Buffer.allocUnsafe(4);
-  message.writeUInt16BE(50273, 0);
-  message.writeUInt8(seqNum, 2);
-  message.writeUInt8(7, 3); //ACK
-
-  // send the message over socket
-  socket.send(message, 0, message.length, clientPort,
-    clientAddress, function (err, bytes) {
-    if (err) {
-      throw err;
-    }
-  });
-};
+//exports.sendACK = function(socket, clientPort,
+//  clientAddress, seqNum) {
+//
+//
+//  // send the message over socket
+//  socket.send(message, 0, message.length, clientPort,
+//    clientAddress, function (err, bytes) {
+//    if (err) {
+//      throw err;
+//    }
+//  });
+//};
+//
+//// send a register message 
+//exports.sendRegister = function(socket, clientPort,
+//  clientAddress, seqNum, serviceIP, servicePort, 
+//  serviceData, serviceName) {
+//
+//  var message = Buffer.allocUnsafe(15 + serviceName.length);
+//  message.writeUInt16BE(50273, 0);
+//  message.writeUInt8(seqNum, 2);
+//  message.writeUInt8(1, 3); //register
+//  //message.writeUInt32BE(serviceIP, 4); //service IP
+//  ip.toBuffer(ip.address(), message, 4); // write IP using IP package
+//  message.writeUInt16BE(servicePort, 8); //service port
+//  message.writeUInt32BE(serviceData, 10); //service data
+//  message.writeUInt8(serviceName.length, 14); //service name len
+//
+//  //write out the serviceName on the end
+//  message.write(serviceName.toString('ascii'), 15);
+//
+//  // send the message over socket
+//  socket.send(message, 0, message.length, clientPort,
+//    clientAddress, function (err, bytes) {
+//    if (err) {
+//      throw err;
+//    }
+//  });
+//};
+//
+//// send an unregister message to unregister the servicePort
+//exports.sendUnregister = function(socket, clientPort,
+//  clientAddress, seqNum, serviceIP, servicePort) {
+//
+//  var message = Buffer.allocUnsafe(10);
+//  message.writeUInt16BE(50273, 0);
+//  message.writeUInt8(seqNum, 2);
+//  message.writeUInt8(5, 3); //unregister
+//  message.writeUInt32BE(serviceIP, 4);//serviceIP
+//  message.writeUInt16BE(servicePort, 8)//servicePort
+//
+//  // send the message over socket
+//  socket.send(message, 0, message.length, clientPort,
+//    clientAddress, function (err, bytes) {
+//    if (err) {
+//      throw err;
+//    }
+//  });
+//};
+//
+//// send a fetch message to get all registered nodes with serviceName as a prefix
+//exports.sendFetch = function(socket, clientPort,
+//  clientAddress, seqNum, serviceName) {
+//
+//  var message = Buffer.allocUnsafe(5 + serviceName.length);
+//  message.writeUInt16BE(50273, 0);
+//  message.writeUInt8(seqNum, 2);
+//  message.writeUInt8(3, 3); // Fetch
+//  message.writeUInt8(serviceName.length, 4);
+//
+//  //write out the serviceName on the end
+//  message.write(serviceName.toString('ascii'), 5);
+//
+//  // send the message over socket
+//  socket.send(message, 0, message.length, clientPort,
+//    clientAddress, function (err, bytes) {
+//    if (err) {
+//      throw err;
+//    }
+//  });
+//};
+//
+//// send a probe message
+//exports.sendProbe = function(socket, clientPort,
+//  clientAddress, seqNum) {
+//
+//  var message = Buffer.allocUnsafe(4);
+//  message.writeUInt16BE(50273, 0);
+//  message.writeUInt8(seqNum, 2);
+//  message.writeUInt8(6, 3); //Probe
+//
+//  // send the message over socket
+//  socket.send(message, 0, message.length, clientPort,
+//    clientAddress, function (err, bytes) {
+//    if (err) {
+//      throw err;
+//    }
+//  });
+//};
