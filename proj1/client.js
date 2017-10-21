@@ -10,6 +10,7 @@ var messages = require('./messages');
 REG_HOST = 'cse461.cs.washington.edu';
 REG_PORT = 46101;
 
+
 // port that this registration client will be sending on. PORT + 1 will also be used for listening.
 PORT = process.argv[2];
 
@@ -23,7 +24,6 @@ var FETCHRESPONSE = 4;
 var UNREG = 5;
 var PROBE = 6;
 var ACK = 7;
-
 
 // This state variable determines what message we are hoping to see at this moment.
 
@@ -39,57 +39,52 @@ var client_sender = dgram.createSocket('udp4');
 var client_listener = dgram.createSocket('udp4');
 
 // listen for messages from registration service. Basically just responds to ACKS
-client_listener.on('listening', function () {
-  var address = client_listener.address(); //where is this used?
-});
+//client_listener.on('listening', function () {
+//  var address = client_listener.address(); //where is this used?
+//});
 
 // listen for messages from registration service. Listens for response messages
-client_sender.on('listening', function () {
-  var address = client_sender.address(); //where is this used?
-});
+//client_sender.on('listening', function () {
+//  var address = client_sender.address(); //where is this used?
+//});
 
-//
 client_listener.on('message', function (message, remote) {
-	// need to process message and send back an ACK if it is a probe
-	pMessage = messages.processMessage(message);
-	if (pMessage["command"] == PROBE) {
-		console.log("I've been probed!");
-    // make an ack and send it off
-    var ack = messages.makeAck(seqNum);
-    messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
-    rl.prompt();
-		seqNum++; //increase seqNum here?
-	}
-
+  // need to process message and send back an ACK if it is a probe
+  pMessage = messages.processMessage(message);
+  if (pMessage["command"] == PROBE) {
+    console.log("I've been probed!");
+      // make an ack and send it off
+      var ack = messages.makeAck(seqNum);
+      messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
+      rl.prompt();
+    seqNum++; //increase seqNum here?
+  }
 });
 
 client_sender.on('message', function (message, remote) {
-	//need to print to console depending on what state we're in.
-	pMessage = messages.processMessage(message);
+  //need to print to console depending on what state we're in.
+  pMessage = messages.processMessage(message);
 
-	if (pMessage["command"] == ACK) { //ACK
-		if (state == 0) {
-			console.log("Success: received ACK");
+  if (pMessage["command"] == ACK) { //ACK
+    if (state == 0) {
+      console.log("Success: received ACK");
       state = 3;
-		}
-	}else if (pMessage["command"] == REGED) { //Registered
-		if (state == 1) {
-			console.log("Successful: lifetime = " + pMessage["lifetime"]);
+    }
+  } else if (pMessage["command"] == REGED) { //Registered
+    if (state == 1) {
+      console.log("Successful: lifetime = " + pMessage["lifetime"]);
       state = 3;
-		}
-	} else if (pMessage["command"] == FETCHRESPONSE) { //fetch response
-		if (state == 2) {
-
-			for (i=0; i < pMessage["numEntries"]; i++) {
-
-				console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " " + 
-					pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
-			}
-
+    }
+  } else if (pMessage["command"] == FETCHRESPONSE) { //fetch response
+    if (state == 2) {
+      for (i=0; i < pMessage["numEntries"]; i++) {
+        console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " " + 
+          pMessage["entries"][i].get("port") + " " + pMessage["entries"][i].get("data"));
+      }
       state = 3;
-		}
-	}
-	rl.prompt(); // print the prompt again once we get a message back.
+    }
+  }
+  rl.prompt(); // print the prompt again once we get a message back.
 });
 
 // create a read line interface
@@ -104,61 +99,75 @@ rl.on('line', function(text) {
 
   if (ln[0] == "r") { //send register
 
-  	if (ln.length != 4) {
-  		console.log("Please provide portNum, data, and serviceName");
-  	}
+    if (ln.length != 4) {
+      console.log("Please provide portNum, data, and serviceName");
+      rl.prompt();
+      return;
+    }
 
     portNum = ln[1];
     data = ln[2];
     serviceName = ln[3];
     serviceIP = ip.address();
-    state = 1;
+    state = 1; 
+
     var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
     seqNum++;
+    var tries = 0;
+    var timer = setTimeout(checkForResponse, 5000, reg, tries, "REG");
+
   } else if (ln[0] == "u") { //send Unregister
-  	if (ln.length != 2) {
-  		console.log("Please provide portNum");
+    if (ln.length != 2) {
+      console.log("Please provide portNum");
       rl.prompt();
       return;
-  	}
+    }
 
-  	portNum = ln[1];
-  	state = 0;
+    portNum = ln[1];
+    state = 0;
+
     var unreg = messages.makeUnregister(seqNum, portNum);
-  	messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
-  	seqNum++;
+    messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
+    seqNum++;
+    var tries = 0;
+    var timer = setTimeout(checkForResponse, 5000, unreg, tries, "UNREG");
 
   } else if (ln[0] == "f") { //send fetch
 
-  	if (ln.length == 2) {
-  		serviceNamePrefix = ln[1];
-  	} else {
-  		serviceNamePrefix = "";
-  	}
-  	  	
-  	state = 2;
+    if (ln.length == 2) {
+      serviceNamePrefix = ln[1];
+    } else {
+      serviceNamePrefix = "";
+    }
+        
+    state = 2;
+
     var fetch = messages.makeFetch(seqNum, serviceNamePrefix);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, fetch);
-  	seqNum++;
+    seqNum++;
+    var tries = 0;
+    var timer = setTimeout(checkForResponse, 5000, fetch, tries, "FETCH");
   
   } else if (ln[0] == "p") { //send Probe
-  	state = 0;
+    state = 0;
 
     var probe = messages.makeProbe(seqNum);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, probe);
-  	seqNum++;
+    seqNum++;
+    var tries = 0;
+    var timer = setTimeout(checkForResponse, 5000, probe, tries, "PROBE");
 
   } else if (ln[0] == "q") { //quit
 
-    //do we need to unregister first?
-  	process.exit(0);
+    process.exit(0);
   
   } else {
 
-  	console.log("not a valid command!");
-  	rl.prompt();
-
+    console.log("not a valid command!");
+    rl.prompt();
+    return;
+  
   }
 
 });
@@ -166,12 +175,17 @@ rl.on('line', function(text) {
 client_sender.bind(parseInt(PORT));
 client_listener.bind(parseInt(PORT) + 1);
 
-function checkForResponse(cmd, tries) {
-  if (cmd == ACK) {
-    if (state == 0 && tries < 3) {
-      // we haven't gotten an ACK; send another
-      // resend
+// function which sends the message up to three times if it heard no response.
+function checkForResponse(message, tries, cmd) {
+  if (state != 3){ // If we are in state 3 then we can do nothing
+    if (tries == 3){ //if we've tried 3 times then give up and prompt again
+      console.log("sent 3 " + cmd + " messages but got no reply");
+      rl.prompt();
+    } else {
+      tries++;
+      console.log("Timed out waiting for reply to " + cmd + " message");
+      messages.sendMessage(client_sender, REG_PORT, REG_HOST, message); //resend message
+      var timer = setTimeout(checkForResponse, 3000, message, tries, cmd);
     }
   }
 }
-
