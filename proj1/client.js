@@ -15,6 +15,8 @@ REG_PORT = 46101;
 PORT = process.argv[2];
 
 var seqNum = 0;
+var ports = new Set(); //a set of ports that we need to keep registered.
+
 
 // global message types
 var REG = 1;
@@ -73,6 +75,7 @@ client_sender.on('message', function (message, remote) {
   } else if (pMessage["command"] == REGED) { //Registered
     if (state == 1) {
       console.log("Successful: lifetime = " + pMessage["lifetime"]);
+      //var timer = setTimeout(stayRegistered, (pMessage["lifetime"] * 1000)); //how do we know what port this corresponds to?
       state = 3;
     }
   } else if (pMessage["command"] == FETCHRESPONSE) { //fetch response
@@ -104,12 +107,18 @@ rl.on('line', function(text) {
       rl.prompt();
       return;
     }
+    if (parseInt(ln[1]) > 65535){
+      console.log("Please enter a valid port number");
+      rl.prompt();
+      return;
+    }
 
-    portNum = ln[1];
+    portNum = parseInt(ln[1]);
     data = ln[2];
     serviceName = ln[3];
     serviceIP = ip.address();
-    state = 1; 
+    state = 1;
+    ports.add(portNum);
 
     var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
@@ -126,6 +135,7 @@ rl.on('line', function(text) {
 
     portNum = ln[1];
     state = 0;
+    ports.delete(portNum);
 
     var unreg = messages.makeUnregister(seqNum, portNum);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
@@ -167,7 +177,7 @@ rl.on('line', function(text) {
     console.log("not a valid command!");
     rl.prompt();
     return;
-  
+
   }
 
 });
@@ -188,4 +198,8 @@ function checkForResponse(message, tries, cmd) {
       var timer = setTimeout(checkForResponse, 3000, message, tries, cmd);
     }
   }
+}
+
+// function which registers porta which are about to expire
+function stayRegistered(){
 }
