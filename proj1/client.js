@@ -77,7 +77,7 @@ client_sender.on('message', function (message, remote) {
       console.log("Successful: lifetime of port " + registered + " is " + pMessage["lifetime"] + " seconds");
 
       //set a timer to register the port again after lifetime seconds
-      var timer = setTimeout(stayRegistered, (pMessage["lifetime"] * 1000) - 2, registered);
+      var timer = setTimeout(stayRegistered, ((pMessage["lifetime"] * 1000) - 2)/4, registered);
       
       state = 3;
     }
