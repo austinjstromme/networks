@@ -39,6 +39,7 @@ var client_listener = dgram.createSocket('udp4');
 
 //listener socket just responds to ACKs sent by the server
 client_listener.on('message', function (message, remote) {
+
   // need to process message and send back an ACK if it is a probe
   pMessage = messages.processMessage(message);
   if (pMessage["command"] == PROBE) {
@@ -64,7 +65,7 @@ client_sender.on('message', function (message, remote) {
     }
   } else if (pMessage["command"] == REGED) { //Registered
     if (state == 1) {
-      
+
       //get the port that this message corresonds to
       var registered;
       sessions.forEach(function (session, port, map){
@@ -73,13 +74,12 @@ client_sender.on('message', function (message, remote) {
         }
       });
 
-      console.log("Successful: lifetime of port " + registered + " is " + pMessage["lifetime"]);
+      console.log("Successful: lifetime of port " + registered + " is " + pMessage["lifetime"] + " seconds");
 
-      //set a time to register the port again after lifetime seconds
+      //set a timer to register the port again after lifetime seconds
       var timer = setTimeout(stayRegistered, (pMessage["lifetime"] * 1000) - 2, registered);
       
       state = 3;
-    
     }
 
   } else if (pMessage["command"] == FETCHRESPONSE) { //fetch response
@@ -91,6 +91,7 @@ client_sender.on('message', function (message, remote) {
       state = 3;
     }
   }
+
   rl.prompt(); // print the prompt again once we get a message back.
 });
 
@@ -123,32 +124,33 @@ rl.on('line', function(text) {
     serviceIP = ip.address();
     state = 1; //listen for Registered message
     
+    //make a new session object and store it
     var portSession = new session(portNum, data, serviceName, seqNum);
     sessions.set(portNum, portSession);
 
+    //make the reg message and try to send it
     var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
     seqNum++;
     var tries = 0;
     var timer = setTimeout(checkForResponse, 4000, reg, tries, "REG");
 
+    
   } else if (ln[0] == "u") { //send Unregister
+
     if (ln.length != 2) {
       console.log("Please provide portNum");
       rl.prompt();
       return;
     }
 
-    portNum = ln[1];
+    portNum = parseInt(ln[1]);
     state = 0;
-
     sessions.delete(portNum);
-
 
     var unreg = messages.makeUnregister(seqNum, portNum);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
     seqNum++;
-
     var tries = 0;
     var timer = setTimeout(checkForResponse, 4000, unreg, tries, "UNREG");
 
@@ -211,7 +213,7 @@ function checkForResponse(message, tries, cmd) {
 
 //function to have a port register itself again
 function stayRegistered(port){
-  if (sessions.has(port)){
+  if (sessions.has(port)){ //only register if the port is still in sessions
     sessions.get(port).stayRegistered(seqNum); //use global seqNum
   }
 }
@@ -227,7 +229,9 @@ function session(port, data, name, seqNum){
   this.stayRegistered = function(seqNum){
     serviceIP = ip.address();
     state = 1;
-    this.seqNum = seqNum; //reset seqNum. This is important.
+    
+    //reset seqNum. This is important because the registration service will now associate this seqNum to this port.
+    this.seqNum = seqNum;
     var reg = messages.makeRegister(this.seqNum, serviceIP, this.port, this.data, this.name);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
     seqNum++;
