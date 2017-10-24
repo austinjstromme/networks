@@ -10,13 +10,11 @@ var messages = require('./messages');
 REG_HOST = 'cse461.cs.washington.edu';
 REG_PORT = 46101;
 
-
 // port that this registration client will be sending on. PORT + 1 will also be used for listening.
 PORT = process.argv[2];
 
-var seqNum = 0;
-var ports = new Set(); //a set of ports that we need to keep registered.
-
+var seqNum = 0; // global sequence number for all messages sent
+var sessions = new Map(); // a Map of ports that we currently have registered
 
 // global message types
 var REG = 1;
@@ -28,7 +26,6 @@ var PROBE = 6;
 var ACK = 7;
 
 // This state variable determines what message we are hoping to see at this moment.
-
 // 0 means we want an ACK
 // 1 means we want an Registered message
 // 2 means we want a FetchResponse message
@@ -36,35 +33,28 @@ var ACK = 7;
 var state = 0;
 var timeout;
 
-// make our sockets which will be bound to p and p+1
+// make our sockets which will be bound to ports p and p+1
 var client_sender = dgram.createSocket('udp4');
 var client_listener = dgram.createSocket('udp4');
 
-// listen for messages from registration service. Basically just responds to ACKS
-//client_listener.on('listening', function () {
-//  var address = client_listener.address(); //where is this used?
-//});
-
-// listen for messages from registration service. Listens for response messages
-//client_sender.on('listening', function () {
-//  var address = client_sender.address(); //where is this used?
-//});
-
+//listener socket just responds to ACKs sent by the server
 client_listener.on('message', function (message, remote) {
   // need to process message and send back an ACK if it is a probe
   pMessage = messages.processMessage(message);
   if (pMessage["command"] == PROBE) {
     console.log("I've been probed!");
-      // make an ack and send it off
-      var ack = messages.makeAck(seqNum);
-      messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
-      rl.prompt();
-    seqNum++; //increase seqNum here?
+    
+    // make an ack and send it off
+    var ack = messages.makeAck(seqNum);
+    messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
+    seqNum++;
+    rl.prompt();
   }
 });
 
+//primary socket for communicating with registration service
 client_sender.on('message', function (message, remote) {
-  //need to print to console depending on what state we're in.
+  
   pMessage = messages.processMessage(message);
 
   if (pMessage["command"] == ACK) { //ACK
@@ -74,10 +64,24 @@ client_sender.on('message', function (message, remote) {
     }
   } else if (pMessage["command"] == REGED) { //Registered
     if (state == 1) {
-      console.log("Successful: lifetime = " + pMessage["lifetime"]);
-      //var timer = setTimeout(stayRegistered, (pMessage["lifetime"] * 1000)); //how do we know what port this corresponds to?
+      
+      //get the port that this message corresonds to
+      var registered;
+      sessions.forEach(function (session, port, map){
+        if (session.seqNum == pMessage["seqNum"]){
+          registered = port;
+        }
+      });
+
+      console.log("Successful: lifetime of port " + registered + " is " + pMessage["lifetime"]);
+
+      //set a time to register the port again after lifetime seconds
+      var timer = setTimeout(stayRegistered, (pMessage["lifetime"] * 1000) - 2, registered);
+      
       state = 3;
+    
     }
+
   } else if (pMessage["command"] == FETCHRESPONSE) { //fetch response
     if (state == 2) {
       for (i=0; i < pMessage["numEntries"]; i++) {
@@ -117,14 +121,16 @@ rl.on('line', function(text) {
     data = ln[2];
     serviceName = ln[3];
     serviceIP = ip.address();
-    state = 1;
-    ports.add(portNum);
+    state = 1; //listen for Registered message
+    
+    var portSession = new session(portNum, data, serviceName, seqNum);
+    sessions.set(portNum, portSession);
 
     var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
     seqNum++;
     var tries = 0;
-    var timer = setTimeout(checkForResponse, 5000, reg, tries, "REG");
+    var timer = setTimeout(checkForResponse, 4000, reg, tries, "REG");
 
   } else if (ln[0] == "u") { //send Unregister
     if (ln.length != 2) {
@@ -135,13 +141,16 @@ rl.on('line', function(text) {
 
     portNum = ln[1];
     state = 0;
-    ports.delete(portNum);
+
+    sessions.delete(portNum);
+
 
     var unreg = messages.makeUnregister(seqNum, portNum);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
     seqNum++;
+
     var tries = 0;
-    var timer = setTimeout(checkForResponse, 5000, unreg, tries, "UNREG");
+    var timer = setTimeout(checkForResponse, 4000, unreg, tries, "UNREG");
 
   } else if (ln[0] == "f") { //send fetch
 
@@ -157,7 +166,7 @@ rl.on('line', function(text) {
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, fetch);
     seqNum++;
     var tries = 0;
-    var timer = setTimeout(checkForResponse, 5000, fetch, tries, "FETCH");
+    var timer = setTimeout(checkForResponse, 4000, fetch, tries, "FETCH");
   
   } else if (ln[0] == "p") { //send Probe
     state = 0;
@@ -166,7 +175,7 @@ rl.on('line', function(text) {
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, probe);
     seqNum++;
     var tries = 0;
-    var timer = setTimeout(checkForResponse, 5000, probe, tries, "PROBE");
+    var timer = setTimeout(checkForResponse, 4000, probe, tries, "PROBE");
 
   } else if (ln[0] == "q") { //quit
 
@@ -188,18 +197,42 @@ client_listener.bind(parseInt(PORT) + 1);
 // function which sends the message up to three times if it heard no response.
 function checkForResponse(message, tries, cmd) {
   if (state != 3){ // If we are in state 3 then we can do nothing
-    if (tries == 3){ //if we've tried 3 times then give up and prompt again
+    if (tries == 3){ // If we've tried 3 times then give up and prompt again
       console.log("sent 3 " + cmd + " messages but got no reply");
       rl.prompt();
     } else {
       tries++;
       console.log("Timed out waiting for reply to " + cmd + " message");
       messages.sendMessage(client_sender, REG_PORT, REG_HOST, message); //resend message
-      var timer = setTimeout(checkForResponse, 3000, message, tries, cmd);
+      var timer = setTimeout(checkForResponse, 4000, message, tries, cmd);
     }
   }
 }
 
-// function which registers porta which are about to expire
-function stayRegistered(){
+//function to have a port register itself again
+function stayRegistered(port){
+  if (sessions.has(port)){
+    sessions.get(port).stayRegistered(seqNum); //use global seqNum
+  }
+}
+
+//constructor function for making a method obect
+function session(port, data, name, seqNum){
+  this.port = port;
+  this.data = data;
+  this.name = name;
+  this.seqNum = seqNum;
+  
+  //method for resending a register message on this port. Changes the seqNum to the new seqNum.
+  this.stayRegistered = function(seqNum){
+    serviceIP = ip.address();
+    state = 1;
+    this.seqNum = seqNum; //reset seqNum. This is important.
+    var reg = messages.makeRegister(this.seqNum, serviceIP, this.port, this.data, this.name);
+    messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
+    seqNum++;
+
+    var tries = 0;
+    var timer = setTimeout(checkForResponse, 4000, reg, tries, "REG");
+  };
 }
