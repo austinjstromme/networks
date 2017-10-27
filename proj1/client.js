@@ -169,8 +169,10 @@ rl.on('line', function(text) {
     }
     portSession = sessions.get(portNum);
 
+    serviceIP = ip.address();
+    console.log("serviceIP = " + serviceIP);
 
-    var unreg = messages.makeUnregister(seqNum, portNum);
+    var unreg = messages.makeUnregister(seqNum, serviceIP, portNum);
     // send unregister message and transition portSession
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
     // we have to update the seqNum here

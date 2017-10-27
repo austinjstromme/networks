@@ -64,7 +64,8 @@ exports.makeUnregister = function(seqNum, serviceIP, servicePort) {
   message.writeUInt16BE(50273, 0);
   message.writeUInt8(seqNum, 2);
   message.writeUInt8(5, 3); //unregister
-  message.writeUInt32BE(serviceIP, 4);//serviceIP
+  //message.writeUInt32BE(serviceIP, 4);//serviceIP
+  ip.toBuffer(ip.address(), message, 4);
   message.writeUInt16BE(servicePort, 8)//servicePort
 
   return message;
