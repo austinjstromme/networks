@@ -99,7 +99,7 @@ client_sender.on('message', function (message, remote) {
 
     // set a timer to register the port again after lifetime seconds
     var timer = setTimeout(stayRegistered,
-      ((pMessage["lifetime"] * 1000) - 2)/4, registered);
+      (pMessage["lifetime"] * 1000)/4, registered);
 
   } else if (pMessage["command"] == FETCHRESPONSE) { // fetch response
     if (agentState == 1) {
@@ -113,6 +113,7 @@ client_sender.on('message', function (message, remote) {
   }
 
   rl.prompt(); // print the prompt again once we get a message back.
+
 });
 
 // create a read line interface
@@ -258,7 +259,7 @@ function checkForResponseForSession(message, tries, cmd, session, desired) {
     // resend the message
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, message);
     var timer = setTimeout(checkForResponseForSession, 4000, message, tries + 1,
-      session, desired);
+      cmd, session, desired);
   } else {
       console.log("sent 3 " + cmd + " messages but got no reply");
       rl.prompt();
@@ -273,7 +274,7 @@ function checkForResponseForAgent(message, tries, cmd, desired) {
     console.log("Timed out waiting for reply to " + cmd + " message");
     // resend the message
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, message);
-    var timer = setTimeout(checkForResponseForAgent, 4000, message, tries + 1,
+    var timer = setTimeout(checkForResponseForAgent, 4000, message, tries + 1, cmd, 
       desired);
   } else {
       console.log("sent 3 " + cmd + " messages but got no reply");
