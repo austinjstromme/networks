@@ -66,7 +66,7 @@ client_sender.on('message', function (message, remote) {
         if (session.state == 2) {
           session.state = 3
           console.log("Success: received ACK");
-          sessions.delete(port);
+          //sessions.delete(port);
           return;
         }
       }
@@ -170,7 +170,6 @@ rl.on('line', function(text) {
     portSession = sessions.get(portNum);
 
     serviceIP = ip.address();
-    console.log("serviceIP = " + serviceIP);
 
     var unreg = messages.makeUnregister(seqNum, serviceIP, portNum);
     // send unregister message and transition portSession
@@ -204,10 +203,24 @@ rl.on('line', function(text) {
     var tries = 0;
     var timer = setTimeout(checkForResponseForAgent, 4000, probe, tries, "PROBE", 2);
 
-  } else if (ln[0] == "q") { //quit
-
-    process.exit(0);
+  } else if (ln[0] == "q") { // quit
+    // for each session, try and close out
+    sessions.forEach(function (portSession, port, map) {
+      serviceIP = ip.address();
   
+      var unreg = messages.makeUnregister(seqNum, serviceIP, portNum);
+      // send unregister message and transition portSession
+      messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
+      // we have to update the seqNum here
+      portSession.seqNum = seqNum;
+      portSession.state = 2;
+      seqNum++;
+      var timer = setTimeout(checkForResponseForSession, 4000, unreg, 0, "UNREG",
+        portSession, 3);
+    });
+  
+    // call shut down
+    shutdown(0);
   } else {
 
     console.log("not a valid command!");
@@ -220,6 +233,15 @@ rl.on('line', function(text) {
 
 client_sender.bind(parseInt(PORT));
 client_listener.bind(parseInt(PORT) + 1);
+
+function shutdown(tries) {
+  if (tries < 20 && sessions.size > 0) {
+    var timer = setTimeout(shutdown, 500, tries + 1);
+  } else {
+    console.log();
+    process.exit(0);
+  }
+}
 
 function checkForResponseForSession(message, tries, cmd, session, desired) {
   rl.prompt();
