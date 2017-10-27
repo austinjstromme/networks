@@ -151,8 +151,8 @@ rl.on('line', function(text) {
     var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
     seqNum++;
-    var tries = 0;
-    setTimeout(checkForResponseForSession, 4000, reg, tries, "REG", portSession, 1);
+    //var tries = 0;
+    setTimeout(checkForResponseForSession, 4000, reg, 0, "REG", portSession, 1);
   } else if (ln[0] == "u") { //send Unregister
 
     if (ln.length != 2) {
@@ -192,18 +192,20 @@ rl.on('line', function(text) {
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, fetch);
     agentState = 1;
     seqNum++;
-    var tries = 0;
-    var timer = setTimeout(checkForResponseForAgent, 4000, fetch, tries, "FETCH", 2);
+    //var tries = 0;
+    var timer = setTimeout(checkForResponseForAgent, 4000, fetch, 0, "FETCH", 2);
   } else if (ln[0] == "p") { // send Probe
 
     var probe = messages.makeProbe(seqNum);
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, probe);
     agentState = 0;
     seqNum++;
-    var tries = 0;
-    var timer = setTimeout(checkForResponseForAgent, 4000, probe, tries, "PROBE", 2);
+    //var tries = 0;
+    var timer = setTimeout(checkForResponseForAgent, 4000, probe, 0, "PROBE", 2);
 
   } else if (ln[0] == "q") { // quit
+    console.log("initiating shutdown");
+
     // for each session, try and close out
     sessions.forEach(function (portSession, port, map) {
       serviceIP = ip.address();
@@ -218,7 +220,7 @@ rl.on('line', function(text) {
       var timer = setTimeout(checkForResponseForSession, 4000, unreg, 0, "UNREG",
         portSession, 3);
     });
-  
+
     // call shut down
     shutdown(0);
   } else {
@@ -234,11 +236,12 @@ rl.on('line', function(text) {
 client_sender.bind(parseInt(PORT));
 client_listener.bind(parseInt(PORT) + 1);
 
+// checks to see if there are any sessions left. If not, exit.
 function shutdown(tries) {
   if (tries < 20 && sessions.size > 0) {
     var timer = setTimeout(shutdown, 500, tries + 1);
   } else {
-    console.log();
+    console.log("Goodbye!");
     process.exit(0);
   }
 }
