@@ -13,7 +13,8 @@ REG_PORT = 46101;
 // port that this registration client will be sending on. PORT + 1 will also be used for listening.
 PORT = process.argv[2];
 
-var seqNum = 0; // global sequence number for all messages sent
+//var seqNum = 0; // global sequence number for all messages sent
+var seqNum = Math.floor(Math.random() * (Math.pow(2, 6) - 1));
 var sessions = new Map(); // a Map of ports that we currently have registered
 
 // global message types
@@ -181,6 +182,7 @@ rl.on('line', function(text) {
     seqNum++;
     var timer = setTimeout(checkForResponseForSession, 4000, unreg, 0, "UNREG",
       portSession, 3);
+    
   } else if (ln[0] == "f") { // send fetch
 
     if (ln.length == 2) {
