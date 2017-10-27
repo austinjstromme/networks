@@ -6,7 +6,7 @@ var dgram = require('dgram');
 var readline = require('readline');
 var messages = require('./messages');
 
-// HOST nd PORT of the registration service
+// HOST and PORT of the registration service
 REG_HOST = 'cse461.cs.washington.edu';
 REG_PORT = 46101;
 
@@ -42,10 +42,11 @@ client_listener.on('message', function (message, remote) {
   // need to process message and send back an ACK if it is a probe
   pMessage = messages.processMessage(message);
   if (pMessage["command"] == PROBE) {
+    console.log();
     console.log("I've been probed!");
     
     // make an ack and send it off
-    var ack = messages.makeAck(seqNum);
+    var ack = messages.makeAck(pMessage["seqNum"]);
     messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
     seqNum++;
     rl.prompt();
@@ -100,6 +101,7 @@ client_sender.on('message', function (message, remote) {
     // set a timer to register the port again after lifetime seconds
     var timer = setTimeout(stayRegistered,
       ((pMessage["lifetime"] * 1000) - 2)/4, registered);
+
   } else if (pMessage["command"] == FETCHRESPONSE) { // fetch response
     if (agentState == 1) {
       for (i = 0; i < pMessage["numEntries"]; i++) {
@@ -166,18 +168,18 @@ rl.on('line', function(text) {
       rl.prompt();
       return;
     }
-    session = sessions.get(portNum);
+    portSession = sessions.get(portNum);
 
 
     var unreg = messages.makeUnregister(seqNum, portNum);
-    // send unregister message and transition session
+    // send unregister message and transition portSession
     messages.sendMessage(client_sender, REG_PORT, REG_HOST, unreg);
     // we have to update the seqNum here
-    session.seqNum = seqNum;
-    session.state = 2;
+    portSession.seqNum = seqNum;
+    portSession.state = 2;
     seqNum++;
     var timer = setTimeout(checkForResponseForSession, 4000, unreg, 0, "UNREG",
-      session, 3);
+      portSession, 3);
   } else if (ln[0] == "f") { // send fetch
 
     if (ln.length == 2) {
@@ -221,6 +223,9 @@ client_listener.bind(parseInt(PORT) + 1);
 function checkForResponseForSession(message, tries, cmd, session, desired) {
   if (session.state == desired) {
     // got to the desired state, done!
+    if (desired == 3) {
+      sessions.delete(session.port);
+    }
   } else if (tries < 3) {
     console.log("Timed out waiting for reply to " + cmd + " message");
     // resend the message
@@ -268,8 +273,9 @@ function session(port, data, name, seqNum) {
   // 3 corresponds to (inactive)
   this.state = 0
   
-  //method for resending a register message on this port. Changes the seqNum to the new seqNum.
+  // method for resending a register message on this port. Changes the seqNum to the new seqNum.
   this.stayRegistered = function(seqNum) {
+    console.log("fell into stay registered for port = " + this.port);
     serviceIP = ip.address();
 
     //reset seqNum. This is important because the registration service will now associate this seqNum to this port.
