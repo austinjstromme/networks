@@ -29,7 +29,7 @@ var ACK = 7;
 // 0 means we want an ACK
 // 1 means we want a FetchResponse message
 // 2 means we're not waiting for anything
-var agentState = 0;
+var agentState = 2;
 var timeout;
 
 // make our sockets which will be bound to ports p and p+1
@@ -47,8 +47,7 @@ client_listener.on('message', function (message, remote) {
     
     // make an ack and send it off
     var ack = messages.makeAck(pMessage["seqNum"]);
-    messages.sendMessage(client_listener, REG_PORT, REG_HOST, ack);
-    seqNum++;
+    messages.sendMessage(client_listener, remote.port, REG_HOST, ack);
     rl.prompt();
   }
 });
@@ -62,8 +61,8 @@ client_sender.on('message', function (message, remote) {
     // check to see if the ack was in response to a session unreging
     sessions.forEach(function (session, port, map) {
       if (session.seqNum == pMessage["seqNum"]) {
-        // received an ack for this session, so delete it (since this only
-        // happens when the session tries to unregister)
+        // if session is closing down, delete it since this is what we've
+        // been waiting for
         if (session.state == 2) {
           session.state = 3
           console.log("Success: received ACK");
@@ -145,7 +144,7 @@ rl.on('line', function(text) {
     serviceIP = ip.address();
     
     // make a new session object and store it
-    var portSession = new session(portNum, data, serviceName, seqNum);
+    var portSession = new session(portNum, data, serviceName);
     sessions.set(portNum, portSession);
 
     // make the reg message and try to send it
@@ -221,6 +220,7 @@ client_sender.bind(parseInt(PORT));
 client_listener.bind(parseInt(PORT) + 1);
 
 function checkForResponseForSession(message, tries, cmd, session, desired) {
+  rl.prompt();
   if (session.state == desired) {
     // got to the desired state, done!
     if (desired == 3) {
@@ -257,12 +257,12 @@ function checkForResponseForAgent(message, tries, cmd, desired) {
 // function to have a port register itself again
 function stayRegistered(port) {
   if (sessions.has(port)) { // only register if the port is still in sessions
-    sessions.get(port).stayRegistered(seqNum); // use global seqNum
+    sessions.get(port).stayRegistered();
   }
 }
 
 //constructor function for making a method obect
-function session(port, data, name, seqNum) {
+function session(port, data, name) {
   this.port = port;
   this.data = data;
   this.name = name;
@@ -273,12 +273,13 @@ function session(port, data, name, seqNum) {
   // 3 corresponds to (inactive)
   this.state = 0
   
-  // method for resending a register message on this port. Changes the seqNum to the new seqNum.
-  this.stayRegistered = function(seqNum) {
-    console.log("fell into stay registered for port = " + this.port);
+  // method for resending a register message on this port. Changes the seqNum
+  // to the new seqNum.
+  this.stayRegistered = function() {
     serviceIP = ip.address();
 
-    //reset seqNum. This is important because the registration service will now associate this seqNum to this port.
+    // Reset seqNum. This is important because the registration service will now
+    // associate this seqNum to this port.
     this.seqNum = seqNum;
     var reg = messages.makeRegister(this.seqNum, serviceIP, this.port,
       this.data, this.name);
@@ -288,6 +289,6 @@ function session(port, data, name, seqNum) {
 
     var tries = 0;
     var timer = setTimeout(checkForResponseForSession, 4000, reg, tries, "REG",
-      this.state, 1);
+      this, 1);
   };
 }
