@@ -1,14 +1,15 @@
-//HTTP proxy code
+// HTTP proxy code
 
 var net = require('net');
+var connection = require('./connection');
 
 PORT = process.argv[2];
 
 
-var server = net.createServer(function(socket){
-
-
+var proxy = net.createServer(function(socket) {
+  console.log('client connected to proxy!');
+  var conn = new connection.connection(proxy, socket);
 });
 
-server.listen(PORT, '127.0.0.1');
-console.log('proxy listening on port ' + PORT);
+proxy.listen(PORT);
+console.log('proxy listening on ' + PORT);
