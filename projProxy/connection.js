@@ -70,9 +70,8 @@ function processHeader(header) {
     }
   }
 
-  console.log("find port = " + pHeader["port"]);
-
-  console.log("and host = " + pHeader["host"]);
+  //console.log("find port = " + pHeader["port"]);
+  //console.log("and host = " + pHeader["host"]);
   pHeader["fullHeader"] = header;
 
   return pHeader;
@@ -89,7 +88,6 @@ exports.clientConnection = function (proxy, socket) {
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
-    //console.log("received data! buf = " + buf);
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {
@@ -134,7 +132,6 @@ exports.serverConnection = function (proxy, socket, clientConn) {
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
-    //console.log("received data from server! buf = " + buf);
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {

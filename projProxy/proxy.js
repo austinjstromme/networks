@@ -22,16 +22,37 @@ proxy.on('clientHeader', (clientConn) => {
 
   var serverConn = new connection.serverConnection(proxy, serverSocket, clientConn);
 
-  serverSocket.write(clientConn.pHeader["fullHeader"] + clientConn.sendBuf);
-  //console.log("just wrote to serverSocket " + clientConn.pHeader["fullHeader"] + clientConn.sendBuf);
-  clientConn.sendBuf = null;
-
   clientConn.serverConn = serverConn;
+
+  serverSocket.on('connect', () => {
+    if (clientConn.pHeader["type"] == "CONNECT") {
+      console.log("server socket connected, and tunnel established");
+      clientConn.socket.write("HTTP/1.1 200 OK\r\n\r\n");
+    }
+  });
+
+  serverSocket.on('timeout', () => {
+    if (clientConn.pHeader["type"] == "CONNECT") {
+      clientConn.socket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+    }
+    clientConn.close();
+    serverConn.close();
+  });
+
+  // if it's non-connect, send on the header and any body that's arrived
+  if (clientConn.pHeader["type"] != "CONNECT") {
+    serverSocket.write(clientConn.pHeader["fullHeader"] + clientConn.sendBuf);
+    clientConn.sendBuf = null;
+  }
 });
 
 proxy.on('clientBody', (clientConn, body) => {
   if (body.length == 0) {
     return;
+  }
+
+  if (clientConn.pHeader["type"] == "CONNECT") {
+    console.log("sending over tunnel " + body);
   }
 
   // forward it on
