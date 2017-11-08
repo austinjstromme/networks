@@ -89,7 +89,7 @@ exports.clientConnection = function (proxy, socket) {
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
-    console.log("received data! buf = " + buf);
+    //console.log("received data! buf = " + buf);
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {
@@ -102,16 +102,18 @@ exports.clientConnection = function (proxy, socket) {
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
+        this.proxy.emit('clientHeader', this);
         body = buf.toString().substr(this.header.length, this.headerBuf.length
                                                           - this.header.length);
-        this.proxy.emit('header', this, () => {
-          // forward any part of the body we've already received
-          this.proxy.emit('body', this, body);
-        });
+        this.sendBuf = body;
       }
     } else {
-      // already sent off the header, everything is now body:
-      this.proxy.emit('body', this, buf.toString());
+      if (this.sendBuf != null) {
+        this.sendBuf += buf.toString();
+      } else {
+        // already sent off the header, everything is now body:
+        this.proxy.emit('clientBody', this, buf.toString());
+      }
     }
   });
 
@@ -124,12 +126,15 @@ exports.serverConnection = function (proxy, socket, clientConn) {
   this.proxy = proxy;
   this.socket = socket;
   this.sendBuf = null;
+  this.header = null;
+  this.headerBuf = null;
+  this.pHeader = null;
   this.clientConn = clientConn;
 
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
-    console.log("received data from server! buf = " + buf);
+    //console.log("received data from server! buf = " + buf);
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {

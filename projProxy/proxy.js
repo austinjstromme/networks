@@ -18,11 +18,13 @@ proxy.on('clientHeader', (clientConn) => {
   tokens = clientConn.pHeader["fullHeader"].split(/\s+/);
   console.log(">>> " + tokens[0] + " " + tokens[1]);
 
-  var serverSocket = net.createSocket(clientConn.pHeader["port"], clientConn.pHeader["host"]);
-
-  serverSocket.write(clientConn.pHeader["fullHeader"]);
+  var serverSocket = net.createConnection(clientConn.pHeader["port"], clientConn.pHeader["host"]);
 
   var serverConn = new connection.serverConnection(proxy, serverSocket, clientConn);
+
+  serverSocket.write(clientConn.pHeader["fullHeader"] + clientConn.sendBuf);
+  //console.log("just wrote to serverSocket " + clientConn.pHeader["fullHeader"] + clientConn.sendBuf);
+  clientConn.sendBuf = null;
 
   clientConn.serverConn = serverConn;
 });
@@ -32,15 +34,16 @@ proxy.on('clientBody', (clientConn, body) => {
     return;
   }
 
-  if (clientConn.serverConn == null) {
-    // fatal error
-    console.log("FATAL ERROR - attempted ");
-    process.exit(0);
-  }
-
+  // forward it on
   clientConn.serverConn.socket.write(body);
 });
 
 proxy.on('serverHeader', (serverConn) => {
+  // received a header from the server; forward it along to the client
+  serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"]);
+});
 
+proxy.on('serverBody', (serverConn, body) => {
+  // received some body from the server; forward it along to the client
+  serverConn.clientConn.socket.write(body);
 });
