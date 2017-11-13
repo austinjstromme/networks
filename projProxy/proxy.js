@@ -27,13 +27,17 @@ proxy.on('clientHeader', (clientConn) => {
   serverSocket.on('connect', () => {
     if (clientConn.pHeader["type"] == "CONNECT") {
       console.log("server socket connected, and tunnel established");
-      clientConn.socket.write("HTTP/1.1 200 OK\r\n\r\n");
+      clientConn.socket.write("HTTP/1.0 200 OK\r\n\r\n", 'utf8');
+      clientConn.encoding = 'binary';
+      serverConn.encoding = 'binary';
+      // clear off sendBuf
+      clientConn.sendBuf = null;
     }
   });
 
   serverSocket.on('timeout', () => {
     if (clientConn.pHeader["type"] == "CONNECT") {
-      clientConn.socket.write("HTTP/1.1 502 Bad Gateway\r\n\r\n");
+      clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
     }
     clientConn.close();
     serverConn.close();
@@ -41,7 +45,7 @@ proxy.on('clientHeader', (clientConn) => {
 
   // if it's non-connect, send on the header and any body that's arrived
   if (clientConn.pHeader["type"] != "CONNECT") {
-    serverSocket.write(clientConn.pHeader["fullHeader"] + clientConn.sendBuf);
+    serverSocket.write((clientConn.pHeader["fullHeader"] + clientConn.sendBuf), serverSocket.encoding);
     clientConn.sendBuf = null;
   }
 });
@@ -51,12 +55,8 @@ proxy.on('clientBody', (clientConn, body) => {
     return;
   }
 
-  if (clientConn.pHeader["type"] == "CONNECT") {
-    console.log("sending over tunnel " + body);
-  }
-
-  // forward it on
-  clientConn.serverConn.socket.write(body);
+  // forward it on with correct encoding
+  clientConn.serverConn.socket.write(body, clientConn.encoding);
 });
 
 proxy.on('serverHeader', (serverConn) => {
@@ -66,5 +66,6 @@ proxy.on('serverHeader', (serverConn) => {
 
 proxy.on('serverBody', (serverConn, body) => {
   // received some body from the server; forward it along to the client
+  console.log("got some body from the server");
   serverConn.clientConn.socket.write(body);
 });
