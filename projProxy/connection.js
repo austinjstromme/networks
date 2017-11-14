@@ -66,6 +66,7 @@ function processHeader(header) {
         pHeader["port"] = 80;
       }
     } else {
+      // plus herE?
       pHeader["port"] = +portTokens[2].split('/')[0];
     }
   }
@@ -101,18 +102,16 @@ exports.clientConnection = function (proxy, socket) {
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
+        console.log("processed client header = " + this.pHeader["fullHeader"]);
         this.proxy.emit('clientHeader', this);
         body = buf.toString(this.encoding).substr(this.header.length, this.headerBuf.length
                                                           - this.header.length);
         this.sendBuf = body;
       }
     } else {
-      console.log("got some data from client");
       if (this.sendBuf != null) {
-        console.log("sendBuf is non-null");
         this.sendBuf += buf.toString(this.encoding);
       } else {
-        console.log("sendBuf is null, hand off to proxy");
         // already sent off the header, everything is now body:
         this.proxy.emit('clientBody', this, buf.toString(this.encoding));
       }
@@ -120,7 +119,7 @@ exports.clientConnection = function (proxy, socket) {
   });
 
   socket.on('close', () => {
-    console.log("socket closing -- need to do something!!");
+    console.log("client socket closing -- need to do something!!");
   });
 }
 
@@ -149,10 +148,12 @@ exports.serverConnection = function (proxy, socket, clientConn) {
         this.headerBuf += buf.toString(this.encoding);
       }
       // check if it's a complete header:
+      //console.log("server header = " + this.headerBuf);
       this.header = getHeader(this.headerBuf);
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
+        console.log("processed server header = " + this.pHeader["fullHeader"]);
         this.proxy.emit('serverHeader', this);
         // forward any part of the body we've already received
         body = buf.toString(this.encoding).substr(this.header.length, this.headerBuf.length
@@ -166,7 +167,7 @@ exports.serverConnection = function (proxy, socket, clientConn) {
   });
 
   socket.on('close', () => {
-    console.log("socket closing -- need to do something!!");
+    console.log("server socket closing -- need to do something!!");
   });
 }
 

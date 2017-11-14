@@ -7,7 +7,6 @@ PORT = process.argv[2];
 
 
 var proxy = net.createServer(function(socket) {
-  console.log('client connected to proxy!');
   var clientConn = new connection.clientConnection(proxy, socket);
 });
 
@@ -18,7 +17,16 @@ proxy.on('clientHeader', (clientConn) => {
   tokens = clientConn.pHeader["fullHeader"].split(/\s+/);
   console.log(">>> " + tokens[0] + " " + tokens[1]);
 
-  var serverSocket = net.createConnection(clientConn.pHeader["port"], clientConn.pHeader["host"]);
+  var serverSocket = net.createConnection(clientConn.pHeader["port"],
+    clientConn.pHeader["host"]);
+
+  // handle problems with connecting:
+  serverSocket.on('error', (data) => {
+    console.log("error error errroorrrrr = " + data);
+    if (!clientConn.socket.destroyed) {
+      clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
+    }
+  });
 
   var serverConn = new connection.serverConnection(proxy, serverSocket, clientConn);
 
@@ -36,15 +44,17 @@ proxy.on('clientHeader', (clientConn) => {
   });
 
   serverSocket.on('timeout', () => {
+    console.log("timed out");
     if (clientConn.pHeader["type"] == "CONNECT") {
       clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
     }
-    clientConn.close();
-    serverConn.close();
+    clientConn.socket.close();
+    serverConn.socket.close();
   });
 
   // if it's non-connect, send on the header and any body that's arrived
   if (clientConn.pHeader["type"] != "CONNECT") {
+    console.log("it's not connect!");
     serverSocket.write((clientConn.pHeader["fullHeader"] + clientConn.sendBuf), serverSocket.encoding);
     clientConn.sendBuf = null;
   }
@@ -55,17 +65,22 @@ proxy.on('clientBody', (clientConn, body) => {
     return;
   }
 
-  // forward it on with correct encoding
-  clientConn.serverConn.socket.write(body, clientConn.encoding);
+  if (!clientConn.serverConn.socket.destroyed) {
+    // forward it on with correct encoding
+    clientConn.serverConn.socket.write(body, clientConn.encoding);
+  }
 });
 
 proxy.on('serverHeader', (serverConn) => {
   // received a header from the server; forward it along to the client
-  serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"]);
+  if (!serverConn.clientConn.socket.destroyed) {
+    serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"]);
+  }
 });
 
 proxy.on('serverBody', (serverConn, body) => {
   // received some body from the server; forward it along to the client
-  console.log("got some body from the server");
-  serverConn.clientConn.socket.write(body);
+  if (!serverConn.clientConn.socket.destroyed) {
+    serverConn.clientConn.socket.write(body, serverConn.encoding);
+  }
 });
