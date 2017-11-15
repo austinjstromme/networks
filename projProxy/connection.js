@@ -24,9 +24,8 @@ function processHeader(header) {
   pHeader["type"] = tokens[0];
   pHeader["port"] = null;
 
-  var tokenInd = 1; // first token is message type
   var loc = 0;
-  for (var tokenInd = 1; tokenInd < tokens.length; tokenInd++) {
+  for (var tokenInd = 0; tokenInd < tokens.length; tokenInd++) {
     // increment loc until it's pointing to the start of the current token
     while ((header.substr(loc, tokens[tokenInd].length) != tokens[tokenInd])
         && (loc < header.length)) {
@@ -36,7 +35,7 @@ function processHeader(header) {
     if (tokens[tokenInd] == "HTTP/1.1") {
       // fix
       header = replaceSubstr(header, loc, loc + tokens[tokenInd].length, "HTTP/1.0");
-    } else if (tokens[tokenInd - 1].toLowerCase() == "host:") {
+    } else if (tokenInd > 0 && tokens[tokenInd - 1].toLowerCase() == "host:") {
       pHeader["host"] = tokens[tokenInd];
       regex = /:+/;
       portTokens = tokens[tokenInd].split(regex);
@@ -47,7 +46,11 @@ function processHeader(header) {
         pHeader["port"] = portTokens[5];
         pHeader["host"] = (portTokens.splice(-1, 1)).join();
       }
-    } else if (tokens[tokenInd - 1].toLowerCase() == "connection:") {
+
+      if (isNaN(pHeader["port"]) || pHeader["port"] < 0 || pHeader["port"] >= 65536) {
+        pHeader["port"] = null;
+      }
+    } else if (tokenInd > 0 && tokens[tokenInd - 1].toLowerCase() == "connection:") {
       // fix
       header = replaceSubstr(header, loc, loc + tokens[tokenInd].length, "close");
     }
@@ -57,22 +60,13 @@ function processHeader(header) {
 
   if (pHeader["port"] == null) {
     portTokens = tokens[1].split(/:+/);
-    if (portTokens.length == 1) {
-      pHeader["port"] = 80;
-    } else if (portTokens.length == 2) {
-      if (portTokens[0].toLowerCase() == 'https') {
-        pHeader["port"] = 443;
-      } else {
-        pHeader["port"] = 80;
-      }
+    if (portTokens[0] == 'https') {
+      pHeader["port"] = 443;
     } else {
-      // plus herE?
-      pHeader["port"] = +portTokens[2].split('/')[0];
+      pHeader["port"] = 80;
     }
   }
 
-  //console.log("find port = " + pHeader["port"]);
-  //console.log("and host = " + pHeader["host"]);
   pHeader["fullHeader"] = header;
 
   return pHeader;
@@ -90,36 +84,41 @@ exports.clientConnection = function (proxy, socket) {
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
+    var data_utf = buf.toString();
+    var data_bin = buf.toString('binary');
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {
-        this.headerBuf = buf.toString(this.encoding);
+        this.headerBuf = data_utf;
       } else {
-        this.headerBuf += buf.toString(this.encoding);
+        this.headerBuf += data_utf;
       }
       // check if it's a complete header:
       this.header = getHeader(this.headerBuf);
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
-        console.log("processed client header = " + this.pHeader["fullHeader"]);
-        this.proxy.emit('clientHeader', this);
-        body = buf.toString(this.encoding).substr(this.header.length, this.headerBuf.length
+        this.sendBuf = data_bin.substr(this.header.length, this.headerBuf.length
                                                           - this.header.length);
-        this.sendBuf = body;
+        if (this.sendBuf.length == 0) {
+          this.sendBuf == null;
+        }
+        this.proxy.emit('clientHeader', this);
       }
     } else {
       if (this.sendBuf != null) {
-        this.sendBuf += buf.toString(this.encoding);
+        this.sendBuf += data_bin;
       } else {
         // already sent off the header, everything is now body:
-        this.proxy.emit('clientBody', this, buf.toString(this.encoding));
+        this.proxy.emit('clientBody', this, data_bin);
       }
     }
   });
 
   socket.on('close', () => {
-    console.log("client socket closing -- need to do something!!");
+    if (this.serverConn != null && !this.serverConn.socket.destroyed) {
+      this.serverConn.socket.destroy();
+    }
   });
 }
 
@@ -136,38 +135,40 @@ exports.serverConnection = function (proxy, socket, clientConn) {
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
+    var data_utf = buf.toString();
+    var data_bin = buf.toString('binary');
     if (this.clientConn.pHeader["type"] == "CONNECT") {
       // simply forward it on
-      this.proxy.emit('serverBody', this, buf.toString(this.encoding));
+      this.proxy.emit('serverBody', this, data_bin);
     }
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {
-        this.headerBuf = buf.toString(this.encoding);
+        this.headerBuf = data_utf;
       } else {
-        this.headerBuf += buf.toString(this.encoding);
+        this.headerBuf += data_utf;
       }
-      // check if it's a complete header:
-      //console.log("server header = " + this.headerBuf);
       this.header = getHeader(this.headerBuf);
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
-        console.log("processed server header = " + this.pHeader["fullHeader"]);
         this.proxy.emit('serverHeader', this);
         // forward any part of the body we've already received
-        body = buf.toString(this.encoding).substr(this.header.length, this.headerBuf.length
+        body = data_bin.substr(this.header.length, this.headerBuf.length
                                                           - this.header.length);
-        this.proxy.emit('serverBody', this, body);
+        if (body.length != 0) {
+          this.proxy.emit('serverBody', this, body);
+        }
       }
     } else {
       // already sent off the header, everything is now body:
-      this.proxy.emit('serverBody', this, buf.toString(this.encoding));
+      this.proxy.emit('serverBody', this, data_bin);
     }
   });
 
   socket.on('close', () => {
-    console.log("server socket closing -- need to do something!!");
+    if (!this.clientConn.socket.destroyed) {
+      this.clientConn.socket.destroy();
+    }
   });
 }
-

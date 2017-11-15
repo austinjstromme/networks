@@ -8,6 +8,10 @@ PORT = process.argv[2];
 
 var proxy = net.createServer(function(socket) {
   var clientConn = new connection.clientConnection(proxy, socket);
+
+  socket.on('error', (data) => {
+    console.log(data);
+  });
 });
 
 proxy.listen(PORT);
@@ -22,7 +26,7 @@ proxy.on('clientHeader', (clientConn) => {
 
   // handle problems with connecting:
   serverSocket.on('error', (data) => {
-    console.log("error error errroorrrrr = " + data);
+    console.log(data);
     if (!clientConn.socket.destroyed) {
       clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
     }
@@ -34,10 +38,7 @@ proxy.on('clientHeader', (clientConn) => {
 
   serverSocket.on('connect', () => {
     if (clientConn.pHeader["type"] == "CONNECT") {
-      console.log("server socket connected, and tunnel established");
       clientConn.socket.write("HTTP/1.0 200 OK\r\n\r\n", 'utf8');
-      clientConn.encoding = 'binary';
-      serverConn.encoding = 'binary';
       // clear off sendBuf
       clientConn.sendBuf = null;
     }
@@ -54,8 +55,13 @@ proxy.on('clientHeader', (clientConn) => {
 
   // if it's non-connect, send on the header and any body that's arrived
   if (clientConn.pHeader["type"] != "CONNECT") {
-    console.log("it's not connect!");
-    serverSocket.write((clientConn.pHeader["fullHeader"] + clientConn.sendBuf), serverSocket.encoding);
+    console.log("just wrote to server " + clientConn.pHeader["fullHeader"]);
+    serverSocket.write(clientConn.pHeader["fullHeader"], 'utf8');
+    if (clientConn.sendBuf != null) {
+      //console.log("writing to server sendBuf.length = " + clientConn.sendBuf.length);
+      // write anything remaining
+      serverSocket.write(clientConn.sendBuf, 'binary');
+    }
     clientConn.sendBuf = null;
   }
 });
@@ -66,21 +72,29 @@ proxy.on('clientBody', (clientConn, body) => {
   }
 
   if (!clientConn.serverConn.socket.destroyed) {
+    console.log("writing to server " + body.length + " bytes");
     // forward it on with correct encoding
-    clientConn.serverConn.socket.write(body, clientConn.encoding);
+    clientConn.serverConn.socket.write(body, 'binary');
   }
 });
 
 proxy.on('serverHeader', (serverConn) => {
   // received a header from the server; forward it along to the client
   if (!serverConn.clientConn.socket.destroyed) {
-    serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"]);
+    if (serverConn.clientConn.pHeader["type"] != "CONNECT") {
+      console.log(">>> " + serverConn.pHeader["fullHeader"].split(/\r\n+/)[0]);
+      console.log("full header = " + serverConn.pHeader["fullHeader"]);
+    }
+    serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"], 'utf8');
   }
 });
 
 proxy.on('serverBody', (serverConn, body) => {
   // received some body from the server; forward it along to the client
   if (!serverConn.clientConn.socket.destroyed) {
-    serverConn.clientConn.socket.write(body, serverConn.encoding);
+    console.log("wriiting to client " + body.length + " bytes");
+    serverConn.clientConn.socket.write(body, 'binary');
+  } else {
+    console.log("client was closed, no body sent");
   }
 });
