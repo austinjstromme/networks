@@ -24,6 +24,8 @@ function processHeader(header) {
   pHeader["type"] = tokens[0];
   pHeader["port"] = null;
 
+  pHeader["encoding"] = 'binary';
+
   var loc = 0;
   for (var tokenInd = 0; tokenInd < tokens.length; tokenInd++) {
     // increment loc until it's pointing to the start of the current token
@@ -80,12 +82,12 @@ exports.clientConnection = function (proxy, socket) {
   this.headerBuf = null;
   this.sendBuf = null;
   this.serverConn = null;
-  this.encoding = 'utf8';
+  this.dataEncoding = 'binary';
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
     var data_utf = buf.toString();
-    var data_bin = buf.toString('binary');
+    var data_bin = buf.toString(this.dataEncoding);
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
       if (this.headerBuf == null) {
@@ -98,8 +100,10 @@ exports.clientConnection = function (proxy, socket) {
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
-        this.sendBuf = data_bin.substr(this.header.length, this.headerBuf.length
-                                                          - this.header.length);
+        this.dataEncoding = this.pHeader["encoding"];
+        var body_start = (this.header.length
+          - (this.headerBuf.length - data_utf.length));
+        this.sendBuf = data_bin.substr(body_start, data_bin.length - body_start);
         if (this.sendBuf.length == 0) {
           this.sendBuf == null;
         }
@@ -125,21 +129,21 @@ exports.clientConnection = function (proxy, socket) {
 exports.serverConnection = function (proxy, socket, clientConn) {
   this.proxy = proxy;
   this.socket = socket;
-  this.sendBuf = null;
   this.header = null;
   this.headerBuf = null;
   this.pHeader = null;
   this.clientConn = clientConn;
-  this.encoding = 'utf8';
+  this.dataEncoding = 'binary';
 
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
     var data_utf = buf.toString();
-    var data_bin = buf.toString('binary');
+    var data_bin = buf.toString(this.dataEncoding);
     if (this.clientConn.pHeader["type"] == "CONNECT") {
       // simply forward it on
       this.proxy.emit('serverBody', this, data_bin);
+      return;
     }
     if (this.header == null) {
       // haven't yet received full header, so append onto buffer
@@ -152,10 +156,12 @@ exports.serverConnection = function (proxy, socket, clientConn) {
       if (this.header != null) {
         // it's a complete header - process the message and handle the request
         this.pHeader = processHeader(this.header);
+        this.dataEncoding = this.pHeader["encoding"];
         this.proxy.emit('serverHeader', this);
         // forward any part of the body we've already received
-        body = data_bin.substr(this.header.length, this.headerBuf.length
-                                                          - this.header.length);
+        var body_start = (this.header.length
+          - (this.headerBuf.length - data_utf.length));
+        var body = data_bin.substr(body_start, data_bin.length - body_start);
         if (body.length != 0) {
           this.proxy.emit('serverBody', this, body);
         }
