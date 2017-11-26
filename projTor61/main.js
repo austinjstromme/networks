@@ -1,8 +1,23 @@
+var registration = require("../proj1/client.js");
+var router = require("./router.js");
+
 // port to bind this to
 const PORT = process.argv[2];
+
 // group id
 const GROUPID = 1035;
 
-var router = require('./router');
+//var router = require('./router');
 
-router.createRouter(PORT, GROUPID);
+//router.createRouter(PORT, GROUPID);
+
+//agent = new registration.registrationAgent(33333);
+
+//agent.sendCommand("p");
+//agent.sendCommand("r 12345 3344 Agent6");
+//agent.sendCommand("f");
+//agent.sendCommand("u 12345");
+
+r1 = router.router(PORT, GROUPID, 0000);
+
+r1.emit('open');
