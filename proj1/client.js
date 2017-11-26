@@ -6,12 +6,13 @@ var dgram = require('dgram');
 var readline = require('readline');
 var messages = require('./messages');
 
+
+// a service that uses port and port + 1 to register and unregister ports
 exports.registrationAgent = function (port) {
+
   // HOST and PORT of the registration service
   REG_HOST = 'cse461.cs.washington.edu';
   REG_PORT = 46101;
-
-  console.log("in the agent!");
 
   // port that this registration client will be sending on. PORT + 1 will also be used for listening.
   // PORT = process.argv[2];
@@ -71,7 +72,7 @@ exports.registrationAgent = function (port) {
           if (session.state == 2) {
             session.state = 3
             console.log("Success: received ACK");
-            //sessions.delete(port);
+            //sessions.delete(port); 
             return;
           }
         }
@@ -104,8 +105,9 @@ exports.registrationAgent = function (port) {
 
       // set a timer to register the port again after lifetime seconds
       var timer = setTimeout(stayRegistered,
-        (pMessage["lifetime"] * 1000)/4, registered);
+        (pMessage["lifetime"] * 1000)/2, registered); // not clear what we should divide by here.
 
+    //need to emit an event to somehow pass the list back to agent
     } else if (pMessage["command"] == FETCHRESPONSE) { // fetch response
       if (agentState == 1) {
         for (i = 0; i < pMessage["numEntries"]; i++) {
@@ -116,9 +118,7 @@ exports.registrationAgent = function (port) {
         agentState = 2;
       }
     }
-
     // rl.prompt(); // print the prompt again once we get a message back.
-
   });
 
   // create a read line interface
@@ -128,6 +128,7 @@ exports.registrationAgent = function (port) {
   // rl.prompt();
 
   // rl.on('line', function(text) {
+  // this function allows us to send messages to the registration service. 
   this.sendCommand = function (text) {
 
     ln = text.split(" ")
@@ -160,20 +161,22 @@ exports.registrationAgent = function (port) {
       seqNum++;
       //var tries = 0;
       setTimeout(checkForResponseForSession, 4000, reg, 0, "REG", portSession, 1);
+
     } else if (ln[0] == "u") { //send Unregister
 
       if (ln.length != 2) {
         //console.log("Please provide portNum");
-        //// rl.prompt();
+        // rl.prompt();
         return;
       }
 
       portNum = parseInt(ln[1]);
       if (!sessions.has(portNum)) {
         //console.log("We do not have that portNum registered");
-        //// rl.prompt();
+        // rl.prompt();
         return;
       }
+
       portSession = sessions.get(portNum);
 
       serviceIP = ip.address();
@@ -194,26 +197,24 @@ exports.registrationAgent = function (port) {
         serviceNamePrefix = ln[1];
       } else {
         serviceNamePrefix = "";
-      }
-          
+      }   
       var fetch = messages.makeFetch(seqNum, serviceNamePrefix);
       messages.sendMessage(client_sender, REG_PORT, REG_HOST, fetch);
       agentState = 1;
       seqNum++;
-      //var tries = 0;
       var timer = setTimeout(checkForResponseForAgent, 4000, fetch, 0, "FETCH", 2);
+
     } else if (ln[0] == "p") { // send Probe
 
       var probe = messages.makeProbe(seqNum);
       messages.sendMessage(client_sender, REG_PORT, REG_HOST, probe);
       agentState = 0;
       seqNum++;
-      //var tries = 0;
       var timer = setTimeout(checkForResponseForAgent, 4000, probe, 0, "PROBE", 2);
 
     } else if (ln[0] == "q") { // quit
-      //console.log("initiating shutdown");
 
+      // console.log("initiating shutdown");
       // for each session, try and close out
       sessions.forEach(function (portSession, port, map) {
         serviceIP = ip.address();
@@ -228,9 +229,9 @@ exports.registrationAgent = function (port) {
         var timer = setTimeout(checkForResponseForSession, 4000, unreg, 0, "UNREG",
           portSession, 3);
       });
-
       // call shut down
       shutdown(0);
+
     } else {
 
       //console.log("not a valid command!");
