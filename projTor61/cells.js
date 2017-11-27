@@ -1,6 +1,7 @@
 // this file contains the low-level parsing and writing code for cells
 
 // cell should be a string written from a buffer using the ascii encoding
+  ://app.applyyourself.com/AYApplicantLogin/fl_ApplicantConnectLogin.asp?id=hgsasontents["body"] = 
 //
 // Parses the cell and returns its contents, an object with the following
 //  attributes:
@@ -57,7 +58,104 @@ exports.parseCell = function (cell) {
   return contents;
 }
 
-exports.createCell = function(contents) {
-  /// create the cell using the contents
-  
+// returns an open cell using an ascii encoding
+exports.createOpenCell = function (circuitID, openerID, openedID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x05, 2);
+  buf.writeUInt32BE(openerID, 3);
+  buf.writeUInt32BE(openedID, 7);
+
+  return buf.toString('ascii');
+}
+
+// returns an opened cell using an ascii encoding
+exports.createOpenedCell = function (circuitID, openerID, openedID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x06, 2);
+  buf.writeUInt32BE(openerID, 3);
+  buf.writeUInt32BE(openedID, 7);
+
+  return buf.toString('ascii');
+}
+
+// returns an open failed cell using an ascii encoding
+exports.createOpenFailedCell = function (circuitID, openerID, openedID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x07, 2);
+  buf.writeUInt32BE(openerID, 3);
+  buf.writeUInt32BE(openedID, 7);
+
+  return buf.toString('ascii');
+}
+
+// returns a create cell using an ascii encoding
+exports.createCreateCell = function (circuitID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x01, 2);
+
+  return buf.toString('ascii');
+}
+
+// returns a created cell using an ascii encoding
+exports.createCreatedCell = function (circuitID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x02, 2);
+
+  return buf.toString('ascii');
+}
+
+// returns a create failed cell using an ascii encoding
+exports.createCreateFailedCell = function (circuitID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x03, 2);
+
+  return buf.toString('ascii');
+}
+
+// returns a destory cell using an ascii encoding
+exports.createDestroyCell = function (circuitID) {
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x04, 2);
+
+  return buf.toString('ascii');
+}
+
+// returns a relay cell using an ascii encoding
+exports.createRelayCell = function (circuitID, streamID, relayCmd, body) {
+  if ((body.length + 14) > 512) {
+    console.log("malformed body to createRelayCell!");
+  }
+
+  // starts 0-initialized
+  var buf = Buffer.alloc(512);
+
+  buf.writeUInt16BE(circuitID, 0);
+  buf.writeUInt8(0x03, 2);
+  buf.writeUInt16BE(streamID, 3);
+  buf.writeUInt16BE(body.length, 11);
+  buf.writeUInt8(relayCmd, 13);
+  buf.write(body, 'ascii', 14);
+
+  return buf.toString('ascii');
 }
