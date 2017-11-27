@@ -16,5 +16,4 @@ agent = new registration.registrationAgent(32963);
 //agent.sendCommand("r 12347 3344 Agent8");
 //agent.sendCommand("f A"); // I guess we should listen for a message and then process it? Talk on Monday
 
-r1 = router.router(PORT, GROUPID, 0000);
-//r1.emit('open');
+r1 = router.makeRouter(PORT, GROUPID, 0000);

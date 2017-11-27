@@ -1,7 +1,6 @@
 // this file contains the low-level parsing and writing code for cells
 
 // cell should be a string written from a buffer using the ascii encoding
-  ://app.applyyourself.com/AYApplicantLogin/fl_ApplicantConnectLogin.asp?id=hgsasontents["body"] = 
 //
 // Parses the cell and returns its contents, an object with the following
 //  attributes:

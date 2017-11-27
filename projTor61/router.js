@@ -2,16 +2,17 @@
 
 var net = require('net');
 var events = require('events');
+var util = require('util');
 var cells = require('./cells');
-var connections = require('./connections');
+//var connections = require('./connections');
 var registration = require("../proj1/client.js");
 
 // returns a fresh router binded to this port
 // this is where all of the logic of the router is 
-exports.router = function (port, groupid, instanceNum) {
+exports.makeRouter = function (port, groupid, instanceNum) {
 
   // first create a router object
-  var router = new initializeRouter(port, groupid, instanceNum);
+  var router = new Router(port, groupid, instanceNum);
   
   //the router listens for open messages
   router.on('open', () => console.log("opened"));
@@ -38,9 +39,7 @@ exports.router = function (port, groupid, instanceNum) {
 //  circuitMap: inCircuitID -> outCircuitID
 //  circuitID: the circuit id this starts with
 //  circuitToRouterID: outCircuitID -> routerID
-
-function initializeRouter(port, groupid, instanceNum){
-
+function Router(port, groupid, instanceNum) {
   this.agent = new registration.registrationAgent(32733);
   this.port = port;
   this.groupid = groupid;
@@ -52,14 +51,13 @@ function initializeRouter(port, groupid, instanceNum){
   this.circuitMap = new Map();
 
   // STEP 0: bind a socket to listen on port
-  this.routerListener = new connections.routerListener(this, port);
+  //this.routerListener = new connections.routerListener(this, port);
 
   // STEP 1: Register self using agent
   // this.agent.sendCommand("r " + this.port + "data" +  "Tor61Router-" + groupid + "-" + instanceNum);
 
   // STEP 3: establish ciruit
   // this.circuitID = ; // find a way of choosing ciruit ID
-
-  events.EventEmitter.call(this); // inherit from EventEmitter
-
 }
+
+util.inherits(Router, events.EventEmitter);
