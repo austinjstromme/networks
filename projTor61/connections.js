@@ -12,5 +12,6 @@ exports.routerListener = function(router, port) {
 // An object containing a TCP connection between two routers. Handles incoming
 //	  and outgoing cells on this connection.
 exports.TCPRouterConnection = (router, socket) => {
-
+  // This object needs to handle the OPEN-OPENED handshake
+  // both when we initiate and when the other router does
 }

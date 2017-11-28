@@ -13,9 +13,11 @@ exports.makeRouter = function (port, groupid, instanceNum) {
 
   // first create a router object
   var router = new Router(port, groupid, instanceNum);
-  
-  //the router listens for open messages
-  router.on('open', () => console.log("opened"));
+
+  router.on('fetchResponse', (fetchResult) => {
+    // create circuit with fetchResult:
+    createCircuit(router, fetchResult);
+  });
 
   // router.on('create', () => console.log("created"));
 
@@ -40,7 +42,7 @@ exports.makeRouter = function (port, groupid, instanceNum) {
 //  circuitID: the circuit id this starts with
 //  circuitToRouterID: outCircuitID -> routerID
 function Router(port, groupid, instanceNum) {
-  this.agent = new registration.registrationAgent(32733);
+  this.agent = new registration.registrationAgent(32733, this);
   this.port = port;
   this.groupid = groupid;
   this.id = instanceNum;
@@ -54,10 +56,19 @@ function Router(port, groupid, instanceNum) {
   //this.routerListener = new connections.routerListener(this, port);
 
   // STEP 1: Register self using agent
-  // this.agent.sendCommand("r " + this.port + "data" +  "Tor61Router-" + groupid + "-" + instanceNum);
+  this.agent.sendCommand("r " + this.port + " 16981 " +  "Tor61Router-" + groupid + "-" + instanceNum);
 
-  // STEP 3: establish ciruit
-  // this.circuitID = ; // find a way of choosing ciruit ID
+  // STEP 2: issue fetch request
+  this.agent.sendCommand("f Tor61Router-" + groupid + "-" + instanceNum);
+  //this.agent.sendCommand("f");
+}
+
+function startCircuit(router, fetchResult) {
+  // STEP 0: select 2 routers from fetchResult
+
+  // STEP 1: open TCPRouterConnection with first router
+
+  // STEP 2: send relay extend to first router
 }
 
 util.inherits(Router, events.EventEmitter);

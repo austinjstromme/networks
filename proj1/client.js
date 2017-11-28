@@ -8,7 +8,7 @@ var messages = require('./messages');
 
 
 // a service that uses port and port + 1 to register and unregister ports
-exports.registrationAgent = function (port) {
+exports.registrationAgent = function (port, router) {
 
   // HOST and PORT of the registration service
   REG_HOST = 'cse461.cs.washington.edu';
@@ -110,24 +110,18 @@ exports.registrationAgent = function (port) {
     //need to emit an event to somehow pass the list back to agent
     } else if (pMessage["command"] == FETCHRESPONSE) { // fetch response
       if (agentState == 1) {
-        for (i = 0; i < pMessage["numEntries"]; i++) {
-          console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " "
-            + pMessage["entries"][i].get("port") + " "
-            + pMessage["entries"][i].get("data"));
-        }
+        //for (i = 0; i < pMessage["numEntries"]; i++) {
+          //console.log("[" + (i+1) + "] " + pMessage["entries"][i].get("IP") + " "
+          //  + pMessage["entries"][i].get("port") + " "
+          //  + pMessage["entries"][i].get("data"));
+        //}
+        router.emit("fetchResponse", pMessage["entries"]);
         agentState = 2;
       }
     }
     // rl.prompt(); // print the prompt again once we get a message back.
   });
 
-  // create a read line interface
-  var rl = readline.createInterface(process.stdin, process.stdout, null);
-
-  // rl.setPrompt('Enter r(egister), u(nregister), f(etch), p(robe), or q(uit): ');
-  // rl.prompt();
-
-  // rl.on('line', function(text) {
   // this function allows us to send messages to the registration service. 
   this.sendCommand = function (text) {
 
@@ -136,13 +130,13 @@ exports.registrationAgent = function (port) {
     if (ln[0] == "r") { // send register
 
       if (ln.length != 4) {
-        //console.log("Please provide portNum, data, and serviceName");
-        //// rl.prompt();
+        // console.log("Please provide portNum, data, and serviceName");
+        // rl.prompt();
         return;
       }
       if (parseInt(ln[1]) > 65535) {
-        //console.log("Please enter a valid port number");
-        //// rl.prompt();
+        // console.log("Please enter a valid port number");
+        // rl.prompt();
         return;
       }
 
@@ -156,23 +150,25 @@ exports.registrationAgent = function (port) {
       sessions.set(portNum, portSession);
 
       // make the reg message and try to send it
-      var reg = messages.makeRegister(seqNum, serviceIP, portNum, data, serviceName);
+      var reg = messages.makeRegister(seqNum, serviceIP, portNum, data,
+        serviceName);
       messages.sendMessage(client_sender, REG_PORT, REG_HOST, reg);
       seqNum++;
-      //var tries = 0;
-      setTimeout(checkForResponseForSession, 4000, reg, 0, "REG", portSession, 1);
+      // var tries = 0;
+      setTimeout(checkForResponseForSession, 4000, reg, 0,
+        "REG", portSession, 1);
 
-    } else if (ln[0] == "u") { //send Unregister
+    } else if (ln[0] == "u") { // send Unregister
 
       if (ln.length != 2) {
-        //console.log("Please provide portNum");
+        // console.log("Please provide portNum");
         // rl.prompt();
         return;
       }
 
       portNum = parseInt(ln[1]);
       if (!sessions.has(portNum)) {
-        //console.log("We do not have that portNum registered");
+        // console.log("We do not have that portNum registered");
         // rl.prompt();
         return;
       }
