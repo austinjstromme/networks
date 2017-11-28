@@ -63,12 +63,14 @@ function Router(port, groupid, instanceNum) {
   //this.agent.sendCommand("f");
 }
 
-function startCircuit(router, fetchResult) {
-  // STEP 0: select 2 routers from fetchResult
+function startCircuit(router) {
+  // STEP 0: select a router from availableRouters
 
-  // STEP 1: open TCPRouterConnection with first router
+  // STEP 1: open TCPRouterConnection with it or use an already existing one
+  //var conn = new connections.TCPRouterConnection(router, socket, destRouterID);
 
-  // STEP 2: send relay extend to first router
+  // STEP 2: send create to first router
+  //conn.tryCreate(router.circuitID, 0);
 }
 
 util.inherits(Router, events.EventEmitter);
