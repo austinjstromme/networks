@@ -40,15 +40,15 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
     }
   }
 
-  //socket.on("data", (data) => {
+  socket.on("data", (data) => {
     // parse data using cells, need to do some buffering
 
-  //  if (message is CREATED && this.waitingForCreated) {
-  //    this.waitingForCreated = false;
-  //    router.emit("created", this);
-  //  } else if (message is CREATEFAILED && this.waitingForCreated ) {
-  //    router.emit("createFailed", this);
-  //  }
-  //});
+    if (message is CREATED && this.waitingForCreated) {
+      this.waitingForCreated = false;
+      router.emit("created", this);
+    } else if (message is CREATEFAILED && this.waitingForCreated ) {
+      router.emit("createFailed", this);
+    }
+  });
 
 }
