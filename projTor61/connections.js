@@ -7,9 +7,9 @@ const MAX_TRIES = 3; // max tries
 // object which holds TCP server connection which receives initiations from
 //    other routers. 
 exports.routerListener = function(router, port) {
-	var listener = net.createServer((socket) => {
-		var conn = new TCPRouterConnection(router, socket);
-	});
+  var listener = net.createServer((socket) => {
+    var conn = new TCPRouterConnection(router, socket);
+  });
 }
 
 // An object containing a TCP connection between two routers. Handles incoming
@@ -19,8 +19,10 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
   // both when we initiate and when the other router does
   this.router = router;
   this.socket = socket;
-  this.destRouterID = destRouterID;
+  // this.destRouterID = destRouterID;
   this.waitingForCreated = false;
+
+  
 
   // send create message
   function tryCreate(circuitID, tries) {
@@ -42,7 +44,11 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
 
   socket.on("data", (data) => {
     // parse data using cells, need to do some buffering
-
+    if(data.length != 512){
+      console.log("data on the socket is " + data.length + "bytes long")
+    }
+    cells.parseCell(data)
+  
     if (message is CREATED && this.waitingForCreated) {
       this.waitingForCreated = false;
       router.emit("created", this);
