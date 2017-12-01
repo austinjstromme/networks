@@ -58,11 +58,10 @@ exports.parseCell = function (cell) {
 }
 
 // returns an open cell using an ascii encoding
-exports.createOpenCell = function (circuitID, openerID, openedID) {
+exports.createOpenCell = function (openerID, openedID) {
   // starts 0-initialized
   var buf = Buffer.alloc(512);
 
-  buf.writeUInt16BE(circuitID, 0);
   buf.writeUInt8(0x05, 2);
   buf.writeUInt32BE(openerID, 3);
   buf.writeUInt32BE(openedID, 7);
@@ -71,11 +70,10 @@ exports.createOpenCell = function (circuitID, openerID, openedID) {
 }
 
 // returns an opened cell using an ascii encoding
-exports.createOpenedCell = function (circuitID, openerID, openedID) {
+exports.createOpenedCell = function (openerID, openedID) {
   // starts 0-initialized
   var buf = Buffer.alloc(512);
 
-  buf.writeUInt16BE(circuitID, 0);
   buf.writeUInt8(0x06, 2);
   buf.writeUInt32BE(openerID, 3);
   buf.writeUInt32BE(openedID, 7);
@@ -84,11 +82,10 @@ exports.createOpenedCell = function (circuitID, openerID, openedID) {
 }
 
 // returns an open failed cell using an ascii encoding
-exports.createOpenFailedCell = function (circuitID, openerID, openedID) {
+exports.createOpenFailedCell = function (openerID, openedID) {
   // starts 0-initialized
   var buf = Buffer.alloc(512);
 
-  buf.writeUInt16BE(circuitID, 0);
   buf.writeUInt8(0x07, 2);
   buf.writeUInt32BE(openerID, 3);
   buf.writeUInt32BE(openedID, 7);
