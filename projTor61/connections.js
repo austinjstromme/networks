@@ -8,7 +8,7 @@ const MAX_TRIES = 3; // max tries
 //    other routers. 
 exports.routerListener = function(router, port) {
   var listener = net.createServer((socket) => {
-    var conn = new TCPRouterConnection(router, socket);
+    var conn = new TCPRouterConnection(router, socket, null);
   });
 }
 
@@ -20,12 +20,12 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
   this.router = router;
   this.socket = socket;
   this.destRouterID = destRouterID;
-  //this.waitingForCreated = false;
   // STATE:
   //  0: haven't sent or received anything
   //  1: sent an open, waiting for an opened
   //  2: we're waiting for a created
   //  3: we've sent an opened or received an opened, not waiting for anything
+  //  4: open has failed
   this.state = 0;
 
   function tryOpen(tries) {
@@ -34,31 +34,42 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
         socket.write(cells.createOpenCell(router.id, this.destRouterID);
         this.state = 1;
         setTimeout(tryOpen, TIMEOUT, tries + 1);
-        return;
-      } else if (this.state == 3) {
-        // done!
-        return;
       }
     } else {
+      this.state = 4;
       router.emit('openFailed');
     }
   }
 
   // send create message
   function tryCreate(circuitID, tries) {
-    if (tries == 0) {
-      // haven't tried yet
-      this.waitingForCreated = true;
-      this.socket.write(cells.createCreateCell(circuitID));
-      setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
-    } else if (!this.waitingForCreated) {
-      // we've heard back, so we're done!
+    if (this.state == 4) {
+      // open has failed, ABORT
       return;
+    }
+
+    if (tries == 0) {
+      if (this.state == 3) {
+        // connection is ready to go, start creating
+        this.socket.write(cells.createCreateCell(circuitID));
+        setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
+      } else {
+        // connection is not ready, still waiting for an opened
+        setTimeout(tryCreate, TIMEOUT, circuitID, tries);
+      }
     } else if (tries < MAX_TRIES) {
-      this.socket.write(cells.createCreateCell(circuitID));
-      setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
+      if (this.state == 2) {
+        // still waiting for a created, try again
+        this.socket.write(cells.createCreateCell(circuitID));
+        setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
+      } else {
+        // we've heard back, so we're done!
+        return;
+      }
     } else {
+      // hit max tries, and create has failed
       router.emit("createFailed", this);
+      this.state = 3;
     }
   }
 
@@ -110,5 +121,8 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
     }
   });
 
-  tryOpen(0);
+  // only try open if we are the ones opening
+  if (this.destRouterID != null) {
+    tryOpen(0);
+  }
 }

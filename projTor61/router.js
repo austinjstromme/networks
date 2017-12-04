@@ -45,6 +45,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // router.agent.sendCommand("f Tor61Router-" + groupID + "-" + instanceNum);
   });
 
+  // issue fetch request, this kicks off the createCircuit function
+  router.agent.sendCommand("f Tor61Router-" + groupID + "-" + instanceNum);
+
+  // start trying to create a circuit
+  createCircuit(router, 0);
+
   // now that we've created the router, initiate create circuit
   return router;
 }
@@ -61,6 +67,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  ingressProxy: IngressHTTPProxy
 //  egressProxy: EgressHTTPProxy
 //  circuitMap: inCircuitID -> outCircuitID
+//  circuitCount: count of circuits we've seen so far
 //  circuitID: the circuit id this starts with
 //  circuitIDToRouterID: outCircuitID -> TCPRouterConnection 
 //  circuitLength: the current length of the circuit starting at this router
@@ -70,8 +77,8 @@ function Router(port, groupID, instanceNum) {
   this.groupID = groupID;
   this.instanceNum = instanceNum;
   this.availableRouters = null;
-  this.circuitLength = 1; // The circuit is currently just this router
-  this.circuitID = 1; // Every circuit starts with the id of 1.
+  this.circuitLength = 0; // The circuit is currently just this router
+  this.circuitCount = 1; // Every circuit starts with the id of 1.
   this.id = (this.groupID << 16) || this.instanceNum;
 
   // Initialize openConns, a map of all open TCP connections to this router
@@ -85,29 +92,40 @@ function Router(port, groupID, instanceNum) {
   this.routerListener = new connections.routerListener(this, port);
   // STEP 1: Register self using agent
   this.agent.sendCommand("r " + this.port + " " + this.instanceNum + " " +  "Tor61Router-" + groupID + "-" + instanceNum);
-  // STEP 2: issue fetch request, this kicks off the createCircuit function
-  this.agent.sendCommand("f Tor61Router-" + groupID + "-" + instanceNum);
 }
 
-// established a circuit from router given a list of availableRouters to use in the circuit.
-function createCircuit(router, availableRouters, desiredLength) {
-  while(router.circuitLength < desiredLength){
+// established a circuit from router given a list of availableRouters to use in
+// the circuit.
+function createCircuit(router, tries) {
+  if (tries < MAX_TRIES && router.availableRouters == null) {
+    // wait a bit and try again
+    setTimeout(createCircuit, TIMEOUT, router, tries + 1);
+  } else if (tries < MAX_TRIES) {
     // choose a randomly available router as the next hop in our circuit
-    destRouter = availableRouters[Math.floor(Math.random()*availableRouters.length)];
-
-    //open a TCP connection with that router, if one doesn't already exist
-    if router.openConns.has(destRouter.get("data")){
-      var conn = router.openConns.get(destRouter.get("data"));
+    destRouter = router.availableRouters[Math.floor(Math.random()
+                                          *availableRouters.length)];
+  
+    // open a TCP connection with that router, if one doesn't already exist
+    var conn;
+    if (router.openConns.has(destRouter.get("data"))) {
+      conn = router.openConns.get(destRouter.get("data"));
     } else {
-      var conn = new connections.TCPRouterConnection(router);
+      var socket = net.createSocket(destRouter.get("port"),
+        destRouter.get("IP"));
+      conn = new connections.TCPRouterConnection(router, socket,
+        destRouter.get("data"));
     }
-    
-    //try to create the next hop
+  
+    // try to create the next hop
     conn.tryCreate(findCircuitID(router, destRouter), 0);
+  } else {
+    // out of tries and still haven't gotten a result from our fetch request
+    console.log("fetch request failed, create circuit failed after "
+      + MAX_TRIES + " tries, it's all lost");
   }
 }
 
-//extend the circuit starting at router by one hop
+// extend the circuit starting at router by one hop
 function extendOneHop(sourceRouter, ) {
   // send a relay extend along the circuit
 }
