@@ -9,6 +9,7 @@ var registration = require("../proj1/client.js");
 
 const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 3; // max tries
+const LOGGING = true;
 
 // returns a fresh router binded to this port
 // this is where all of the logic of the router is 
@@ -26,6 +27,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // TODO: implement; change maps and such; check to see if this is
     //  already there NOTE:
     //    contents is a parsed cell
+    router.logger("OPEN EVENT");
+
+
   });
 
   router.on('openFailed', () => {
@@ -93,6 +97,12 @@ function Router(port, groupID, instanceNum) {
   this.routerListener = new connections.routerListener(this, port);
   // STEP 1: Register self using agent
   this.agent.sendCommand("r " + this.port + " " + this.instanceNum + " " +  "Tor61Router-" + groupID + "-" + instanceNum);
+
+  function logger(data) {
+    if (LOGGING) {
+      console.log("Tor61Router " + this.id + ": " + data);
+    }
+  }
 }
 
 // established a circuit from router given a list of availableRouters to use in
@@ -104,7 +114,7 @@ function createCircuit(router, tries) {
   } else if (tries < MAX_TRIES) {
     // choose a randomly available router as the next hop in our circuit
     destRouter = router.availableRouters[Math.floor(Math.random()
-                                          *availableRouters.length)];
+                                          *router.availableRouters.length)];
   
     // open a TCP connection with that router, if one doesn't already exist
     var conn;

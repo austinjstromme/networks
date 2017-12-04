@@ -3,6 +3,7 @@ var cells = require('./cells');
 
 const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 3; // max tries
+const LOGGING = true;
 
 // object which holds TCP server connection which receives initiations from
 //    other routers. 
@@ -31,7 +32,8 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
   function tryOpen(tries) {
     if (tries < MAX_TRIES) {
       if (this.state == 0 || this.state == 1) {
-        socket.write(cells.createOpenCell(router.id, this.destRouterID);
+        socket.write(cells.createOpenCell(router.id, this.destRouterID));
+        logger("SENT OPEN");
         this.state = 1;
         setTimeout(tryOpen, TIMEOUT, tries + 1);
       }
@@ -42,8 +44,10 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
   }
 
   function logger(data) {
-    console.log("TCPRouterConn (" + this.router.id + ", "
+    if (LOGGING) {
+      console.log("TCPRouterConn (" + this.router.id + ", "
       + this.destRouterID + "): " + data);
+    }
   }
 
   // send create message
@@ -57,6 +61,7 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
       if (this.state == 3) {
         // connection is ready to go, start creating
         this.socket.write(cells.createCreateCell(circuitID));
+        logger("SENT CREATE");
         setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
       } else {
         // connection is not ready, still waiting for an opened
@@ -66,6 +71,7 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
       if (this.state == 2) {
         // still waiting for a created, try again
         this.socket.write(cells.createCreateCell(circuitID));
+        logger("SENT CREATE");
         setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
       } else {
         // we've heard back, so we're done!
@@ -81,12 +87,12 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
   socket.on("data", (data) => {
     // parse data using cells, need to do some buffering
     if (data.length != 512) {
-      console.log("data on the socket is " + data.length + "bytes long")
+      logger("data on the socket is " + data.length + "bytes long")
     }
     var contents = cells.parseCell(data);
 
     if (!contents["valid"]) {
-      console.log("corrupt cell from router " + this.destRouterID);
+      logger("CORRUPT CELL");
       return;
     }
 
@@ -103,27 +109,30 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
       // DESTROY
       logger("DESTROY");
     } else if (contents["cmd"] == 5) {
-      logger("OPEN");
       // OPEN
+      logger("OPEN");
       this.router.emit('open', contents);
       this.socket.write(cells.createOpenedCell(this.router.id,
         this.destRouterID));
+      logger("SENT OPENED");
       // successfully established a connection
       if (this.state == 0 || this.state == 3) {
         this.state = 3;
       }
     } else if (contents["cmd"] == 6) {
       // OPENED
+      logger("OPENED");
       if (this.state == 1) {
         // waiting for this
         this.state = 3;
       }
     } else if (contents["cmd"] == 7) {
       // OPEN FAILED
+      logger("OPEN FAILED");
       
     } else if (contents["cmd"] == 8) {
       // RELAY
-
+      logger("RELAY");
     }
   });
 
