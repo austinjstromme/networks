@@ -5,7 +5,7 @@ var events = require('events');
 var util = require('util');
 var cells = require('./cells');
 var connections = require('./connections.js');
-var registration = require("../proj1/client.js");
+var registration = require('../proj1/client.js');
 
 const TIMEOUT = 4000; // timeout in ms
 const MAX_TRIES = 5; // max tries
@@ -20,8 +20,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   router.on('fetchResponse', (fetchResult) => {
     if (fetchResult.length == 0) {
+      router.logger("fetchResult returned with nothing, trying again");
       router.agent.sendCommand("f Tor61Router-" + groupID + "-");
     } else {
+      router.logger("fetchResult returned with results");
       // save the available routers
       router.availableRouters = fetchResult;
     }
@@ -32,7 +34,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     //  already there NOTE:
     //    contents is a parsed cell
     router.logger("OPEN EVENT");
-
 
   });
 
@@ -120,7 +121,8 @@ function createCircuit(router, tries) {
     destRouter = router.availableRouters[Math.floor(Math.random()
                                           * router.availableRouters.length)];
 
-    router.logger("number of available routers: " + router.availableRouters.length);
+    router.logger("number of available routers: "
+      + router.availableRouters.length);
     console.log(destRouter);
 
     // open a TCP connection with that router, if one doesn't already exist
@@ -130,10 +132,11 @@ function createCircuit(router, tries) {
       conn.tryCreate(router.circuitCount, 0);
       router.ciruitCount++;
     } else {
-      var socket = new net.Socket();
-      socket.connect(destRouter.get("port"), destRouter.get("IP"), () => {
-        console.log("connected!");
-      });
+      var socket = new net.createConnection(destRouter.get("port"),
+        destRouter.get("IP"));
+
+      socket.on('connect', () => { router.logger("connected to first part of"
+        + " circuit!"); });
       var conn = new connections.TCPRouterConnection(router, socket,
         destRouter.get("data"));
       // try to create the next hop
