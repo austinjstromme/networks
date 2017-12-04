@@ -41,6 +41,11 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
     }
   }
 
+  function logger(data) {
+    console.log("TCPRouterConn (" + this.router.id + ", "
+      + this.destRouterID + "): " + data);
+  }
+
   // send create message
   function tryCreate(circuitID, tries) {
     if (this.state == 4) {
@@ -87,17 +92,18 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
 
     if (contents["cmd"] == 1) {
       // CREATE
-
+      logger("CREATE");
     } else if (contents["cmd"] == 2) {
       // CREATED
-
+      logger("CREATED");
     } else if (contents["cmd"] == 3) {
       // CREATE FAILED
-
+      logger("CREATE FAILED");
     } else if (contents["cmd"] == 4) {
       // DESTROY
-
+      logger("DESTROY");
     } else if (contents["cmd"] == 5) {
+      logger("OPEN");
       // OPEN
       this.router.emit('open', contents);
       this.socket.write(cells.createOpenedCell(this.router.id,

@@ -63,6 +63,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //    other routers
 //  instanceNum: the instanceNum of this router
 //  groupID: the id of our group, common to all of our routers
+//  id: (groupID << 16) || instanceNum
 //  openConns: map from routerIDs to TCPRouterConnections
 //  ingressProxy: IngressHTTPProxy
 //  egressProxy: EgressHTTPProxy
@@ -123,25 +124,6 @@ function createCircuit(router, tries) {
     console.log("fetch request failed, create circuit failed after "
       + MAX_TRIES + " tries, it's all lost");
   }
-}
-
-// extend the circuit starting at router by one hop
-function extendOneHop(sourceRouter, ) {
-  // send a relay extend along the circuit
-}
-
-// returns the first unused circuitID for router
-function findCircuitID(sourceRouter, destRouter) {
-  circID = 2;
-  while (true) {
-    if (sourceRouter.circuitMap.values().includes(circID) || destRouter.circuitMap.keys().includes(circID)) {
-    // make sure these values are ints and not strings
-      circID++;
-    } else {
-      break;
-    }
-  }
-  return circID;
 }
 
 util.inherits(Router, events.EventEmitter);
