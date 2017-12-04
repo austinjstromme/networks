@@ -10,10 +10,12 @@ var registration = require('../proj1/client.js');
 const TIMEOUT = 4000; // timeout in ms
 const MAX_TRIES = 5; // max tries
 const LOGGING = true;
+const CIRCUIT_LENGTH = 1; // desired circuit length
 
 // returns a fresh router binded to this port
 // this is where all of the logic of the router is 
 exports.makeRouter = function (port, groupID, instanceNum) {
+  const FETCH_COMMAND = ("f Tor61Router-" + groupID + "-");
 
   // first create a router object
   var router = new Router(port, groupID, instanceNum);
@@ -21,7 +23,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('fetchResponse', (fetchResult) => {
     if (fetchResult.length == 0) {
       router.logger("fetchResult returned with nothing, trying again");
-      router.agent.sendCommand("f Tor61Router-" + groupID + "-");
+      router.agent.sendCommand(FETCH_COMMAND);
     } else {
       router.logger("fetchResult returned with results");
       // save the available routers
@@ -34,23 +36,48 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.openConns.set(contents["openerID"], TCPRouterConn);
   });
 
-  router.on('openFailed', () => {
-    // TODO: implement
+  router.on('opened', (contents, TCPRouterConn) => {
+    router.logger("OPENED");
+    // save the router connection
+    router.openConns.set(contents["openedID"], TCRRouterConn);
   });
 
-  // on a create message we 
+  router.on('openFailed', () => {
+    router.logger("OPEN FAILED");
+    // TODO: implement; when does this happen, and what should we do?
+  });
+
+  router.on('createFailed', () => {
+    router.logger("CREATE FAILED");
+    router.agent.sendCommand(FETCH_COMMAND);
+  });
+
+  // on a create message we put the router into our tables
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
     var cnt = router.circuitCount++;
-    router.circuitMap.set([contents["circuitID"], contents["openerID"]], cnt);
-    router.circuitIDToRouterID.set(cnt, contents["openerID"]);
+    router.circuitMap.set([contents["circuitID"], TCPRouterConn.destRouterID],
+      cnt);
+    router.circuitIDToRouterID.set(cnt, TCPRouterConn.destRouterID);
   });
 
   // on a created message we need to send a relay extend
   router.on('created', () => {
     router.circuitLength++;
     router.logger("CREATED");
-    // TODO: extend ciruit logic 
+
+    if (router.circuitLength < CIRCUIT_LENGTH) {
+      router.logger("EXTENDING...");
+      circuitExtend(router, 0);
+    } else {
+      router.emit('circuitEstablished');
+    }
+  });
+
+  router.on('circuitEstablished', () => {
+    router.logger('circuit established');
+
+    // now possibly process buffered requests?
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -141,13 +168,18 @@ function createCircuit(router, tries) {
       var socket = new net.createConnection(destRouter.get("port"),
         destRouter.get("IP"));
 
-      socket.on('connect', () => { router.logger("connected to first part of"
-        + " circuit!"); });
-      var conn = new connections.TCPRouterConnection(router, socket,
-        destRouter.get("data"));
-      // try to create the next hop
-      conn.tryCreate(router.circuitCount, 0);
-      router.circuitCount++;
+      socket.on('connect', () => {
+        router.logger("connected to first part of circuit!");
+        var conn = new connections.TCPRouterConnection(router, socket,
+          destRouter.get("data"));
+        // try to create the next hop
+        conn.tryCreate(router.circuitCount++, 0);
+      });
+
+      socket.on('timeout', () => {
+        router.logger("open timed out");
+        router.emit('createFailed');
+      });
     }
   
     
@@ -155,6 +187,20 @@ function createCircuit(router, tries) {
     // out of tries and still haven't gotten a result from our fetch request
     console.log("fetch request failed, create circuit failed after "
       + MAX_TRIES + " tries, it's all lost");
+  }
+}
+
+function extendCircuit(router, tries) {
+  // for now, we select a router from the list of available routers we've
+  // already gotten
+  destRouter = router.availableRouters[Math.floor(Math.random()
+                                        * router.availableRouters.length)];
+
+  if (router.openConns.has(destRouter.get("data"))) {
+    var conn = router.openConns.get(destRouter.get("data"));
+    // try to create the next hop
+    conn.tryCreate(router.circuitCount, 0);
+    router.ciruitCount++;
   }
 }
 
