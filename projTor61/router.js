@@ -4,11 +4,11 @@ var net = require('net');
 var events = require('events');
 var util = require('util');
 var cells = require('./cells');
-var connections = require('./connections');
+var connections = require('./connections.js');
 var registration = require("../proj1/client.js");
 
-const TIMEOUT = 3000; // timeout in ms
-const MAX_TRIES = 3; // max tries
+const TIMEOUT = 4000; // timeout in ms
+const MAX_TRIES = 5; // max tries
 const LOGGING = true;
 
 // returns a fresh router binded to this port
@@ -19,8 +19,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   var router = new Router(port, groupID, instanceNum);
 
   router.on('fetchResponse', (fetchResult) => {
-    // save the available routers
-    router.availableRouters = fetchResult;
+    if (fetchResult.length == 0) {
+      router.agent.sendCommand("f Tor61Router-" + groupID + "-");
+    } else {
+      // save the available routers
+      router.availableRouters = fetchResult;
+    }
   });
 
   router.on('open', (contents) => {
@@ -50,7 +54,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   });
 
   // issue fetch request, this kicks off the createCircuit function
-  router.agent.sendCommand("f Tor61Router-" + groupID + "-" + instanceNum);
+  router.agent.sendCommand("f Tor61Router-" + groupID + "-");
 
   // start trying to create a circuit
   createCircuit(router, 0);
@@ -77,7 +81,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  circuitIDToRouterID: outCircuitID -> TCPRouterConnection 
 //  circuitLength: the current length of the circuit starting at this router
 function Router(port, groupID, instanceNum) {
-  this.agent = new registration.registrationAgent(32733, this); // where did this port come from?
+  this.agent = new registration.registrationAgent(port + 1, this); // where did this port come from?
   this.port = port;
   this.groupID = groupID;
   this.instanceNum = instanceNum;
@@ -96,9 +100,9 @@ function Router(port, groupID, instanceNum) {
   // STEP 0: bind a socket to listen on port
   this.routerListener = new connections.routerListener(this, port);
   // STEP 1: Register self using agent
-  this.agent.sendCommand("r " + this.port + " " + this.instanceNum + " " +  "Tor61Router-" + groupID + "-" + instanceNum);
+  this.agent.sendCommand("r " + this.port + " " + this.id + " " +  "Tor61Router-" + groupID + "-" + instanceNum);
 
-  function logger(data) {
+  this.logger = (data) => {
     if (LOGGING) {
       console.log("Tor61Router " + this.id + ": " + data);
     }
@@ -114,21 +118,30 @@ function createCircuit(router, tries) {
   } else if (tries < MAX_TRIES) {
     // choose a randomly available router as the next hop in our circuit
     destRouter = router.availableRouters[Math.floor(Math.random()
-                                          *router.availableRouters.length)];
-  
+                                          * router.availableRouters.length)];
+
+    router.logger("number of available routers: " + router.availableRouters.length);
+    console.log(destRouter);
+
     // open a TCP connection with that router, if one doesn't already exist
-    var conn;
     if (router.openConns.has(destRouter.get("data"))) {
-      conn = router.openConns.get(destRouter.get("data"));
+      var conn = router.openConns.get(destRouter.get("data"));
+      // try to create the next hop
+      conn.tryCreate(router.circuitCount, 0);
+      router.ciruitCount++;
     } else {
-      var socket = net.createSocket(destRouter.get("port"),
-        destRouter.get("IP"));
-      conn = new connections.TCPRouterConnection(router, socket,
+      var socket = new net.Socket();
+      socket.connect(destRouter.get("port"), destRouter.get("IP"), () => {
+        console.log("connected!");
+      });
+      var conn = new connections.TCPRouterConnection(router, socket,
         destRouter.get("data"));
+      // try to create the next hop
+      conn.tryCreate(router.circuitCount, 0);
+      router.circuitCount++;
     }
   
-    // try to create the next hop
-    conn.tryCreate(findCircuitID(router, destRouter), 0);
+    
   } else {
     // out of tries and still haven't gotten a result from our fetch request
     console.log("fetch request failed, create circuit failed after "

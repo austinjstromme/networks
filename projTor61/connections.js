@@ -9,13 +9,14 @@ const LOGGING = true;
 //    other routers. 
 exports.routerListener = function(router, port) {
   var listener = net.createServer((socket) => {
+    router.logger("received connection");
     var conn = new TCPRouterConnection(router, socket, null);
   });
 }
 
 // An object containing a TCP connection between two routers. Handles incoming
 //	  and outgoing cells on this connection.
-exports.TCPRouterConnection = (router, socket, destRouterID) => {
+exports.TCPRouterConnection = function (router, socket, destRouterID) {
   // This object needs to handle the OPEN-OPENED handshake
   // both when we initiate and when the other router does
   this.router = router;
@@ -51,7 +52,7 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
   }
 
   // send create message
-  function tryCreate(circuitID, tries) {
+  this.tryCreate = function (circuitID, tries) {
     if (this.state == 4) {
       // open has failed, ABORT
       return;
@@ -62,17 +63,17 @@ exports.TCPRouterConnection = (router, socket, destRouterID) => {
         // connection is ready to go, start creating
         this.socket.write(cells.createCreateCell(circuitID));
         logger("SENT CREATE");
-        setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
+        setTimeout(this.tryCreate, TIMEOUT, circuitID, tries + 1);
       } else {
         // connection is not ready, still waiting for an opened
-        setTimeout(tryCreate, TIMEOUT, circuitID, tries);
+        setTimeout(this.tryCreate, TIMEOUT, circuitID, tries);
       }
     } else if (tries < MAX_TRIES) {
       if (this.state == 2) {
         // still waiting for a created, try again
         this.socket.write(cells.createCreateCell(circuitID));
         logger("SENT CREATE");
-        setTimeout(tryCreate, TIMEOUT, circuitID, tries + 1);
+        setTimeout(this.tryCreate, TIMEOUT, circuitID, tries + 1);
       } else {
         // we've heard back, so we're done!
         return;
