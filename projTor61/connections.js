@@ -91,9 +91,12 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
     if (contents["cmd"] == 1) {
       // CREATE
       this.logger("CREATE");
+      this.router.emit('create', contents, this);
+      this.socket.write(cells.createCreatedCell(contents["circuitID"]));
     } else if (contents["cmd"] == 2) {
       // CREATED
       this.logger("CREATED");
+      this.router.emit('created');
     } else if (contents["cmd"] == 3) {
       // CREATE FAILED
       this.logger("CREATE FAILED");
@@ -104,7 +107,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
       // OPEN
       this.logger("OPEN");
       this.destRouterID = contents["openerID"];
-      this.router.emit('open', contents);
+      this.router.emit('open', contents, this);
       this.socket.write(cells.createOpenedCell(this.router.id,
         this.destRouterID));
       this.logger("SENT OPENED");

@@ -29,22 +29,28 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     }
   });
 
-  router.on('open', (contents) => {
-    // TODO: implement; change maps and such; check to see if this is
-    //  already there NOTE:
-    //    contents is a parsed cell
-    router.logger("OPEN EVENT");
-
+  router.on('open', (contents, TCPRouterConn) => {
+    router.logger("OPEN");
+    router.openConns.set(contents["openerID"], TCPRouterConn);
   });
 
   router.on('openFailed', () => {
     // TODO: implement
   });
 
+  // on a create message we 
+  router.on('create', (contents, TCPRouterConn) => {
+    router.logger("CREATE");
+    var cnt = router.circuitCount++;
+    router.circuitMap.set([contents["circuitID"], contents["openerID"]], cnt);
+    router.circuitIDToRouterID.set(cnt, contents["openerID"]);
+  });
+
   // on a created message we need to send a relay extend
   router.on('created', () => {
     router.circuitLength++;
-    console.log("created")
+    router.logger("CREATED");
+    // TODO: extend ciruit logic 
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -76,10 +82,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  openConns: map from routerIDs to TCPRouterConnections
 //  ingressProxy: IngressHTTPProxy
 //  egressProxy: EgressHTTPProxy
-//  circuitMap: inCircuitID -> outCircuitID
+//  circuitMap: [inCircuitID, routerID] -> outCircuitID
 //  circuitCount: count of circuits we've seen so far
 //  circuitID: the circuit id this starts with
-//  circuitIDToRouterID: outCircuitID -> TCPRouterConnection 
+//  circuitIDToRouterID: outCircuitID -> routerID 
 //  circuitLength: the current length of the circuit starting at this router
 function Router(port, groupID, instanceNum) {
   this.agent = new registration.registrationAgent(port + 1, this); // where did this port come from?
