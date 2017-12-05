@@ -4,8 +4,9 @@ var net = require('net');
 var events = require('events');
 var util = require('util');
 var cells = require('./cells');
-var connections = require('./connections.js');
-var registration = require('../proj1/client.js');
+var connections = require('./connections');
+var stream = require('./stream');
+var registration = require('../proj1/clients');
 
 const TIMEOUT = 4000; // timeout in ms
 const MAX_TRIES = 5; // max tries
@@ -16,6 +17,7 @@ const CIRCUIT_LENGTH = 1; // desired circuit length
 // this is where all of the logic of the router is 
 exports.makeRouter = function (port, groupID, instanceNum) {
   const FETCH_COMMAND = ("f Tor61Router-" + groupID + "-");
+  const PROXY_PORT = port - 1; // this ok?
 
   // first create a router object
   var router = new Router(port, groupID, instanceNum);
@@ -44,7 +46,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   router.on('openFailed', () => {
     router.logger("OPEN FAILED");
-    // TODO: implement; when does this happen, and what should we do?
+    // TODO: implement. When does this happen, and what should we do?
   });
 
   router.on('createFailed', () => {
@@ -74,10 +76,26 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     }
   });
 
-  router.on('circuitEstablished', () => {
-    router.logger('circuit established');
+  router.on('send', (data) => {
+    // sends data along our circuit
+    router.logger("attemping to send data over our circuit");
 
-    // now possibly process buffered requests?
+    // TODO: implement sending data
+  });
+
+  router.on('circuitEstablished', () => {
+    router.logger('circuit established, listening on ' + PROXY_PORT);
+
+    router.streams = [];
+    router.proxyListener = new net.createServer((socket) => {
+      // when a browser connects create a new stream
+      router.logger("received connection from a browser!");
+      router.streams[router.streams.length] = new stream.stream(router,
+        socket, router.streamCount++);
+    });
+
+    // bind to PROXY_PORT
+    router.proxyListener.listen(PROXY_PORT);
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -107,8 +125,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  groupID: the id of our group, common to all of our routers
 //  id: (groupID << 16) || instanceNum
 //  openConns: map from routerIDs to TCPRouterConnections
-//  ingressProxy: IngressHTTPProxy
-//  egressProxy: EgressHTTPProxy
+//  proxyListener: TCP server connection which receives initiations from
+//    browsers
+//  streamCount: count of streams we've made so far, start at 1
+//  outStreams: map from streamID -> outStream, see stream.js. These are
+//    streams which end here. Need this map to look up the connection
+//    with the server when we go off the network
 //  circuitMap: [inCircuitID, routerID] -> outCircuitID
 //  circuitCount: count of circuits we've seen so far
 //  circuitID: the circuit id this starts with
@@ -123,6 +145,7 @@ function Router(port, groupID, instanceNum) {
   this.circuitLength = 0; // The circuit is currently just this router
   this.circuitCount = 1; // Every circuit starts with the id of 1.
   this.id = (this.groupID << 16) || this.instanceNum;
+  this.streamCount = 1; // Streams start at 1 (0 is reserved)
 
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();
@@ -145,7 +168,7 @@ function Router(port, groupID, instanceNum) {
 
 // established a circuit from router given a list of availableRouters to use in
 // the circuit.
-function createCircuit(router, tries) {
+function createCircuit (router, tries) {
   if (tries < MAX_TRIES && router.availableRouters == null) {
     // wait a bit and try again
     setTimeout(createCircuit, TIMEOUT, router, tries + 1);

@@ -143,7 +143,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
 //    other routers. 
 exports.routerListener = function (router, port) {
   var listener = new net.createServer((socket) => {
-    router.logger("received connection");
+    router.logger("received connection from another router!");
     var conn = new exports.TCPRouterConnection(router, socket, null);
   });
 
