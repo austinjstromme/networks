@@ -61,16 +61,21 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
 
-    // store the reverse direction
-    var cnt = makeCircuitID(router, TCPRouterConn);
-    router.circuitMap.set([contents["circuitID"], TCPRouterConn.destRouterID],
-      cnt);
-    router.circuitIDToRouterID.set(cnt, TCPRouterConn.destRouterID);
+    // create a circuit object
+    var inCircuitID = contents["circuitID"];
+    var inRouterID = contents["routerID"];
+    var outCircuitID = makeCircuitID(router, TCPRouterConn);
+    var outRouterID = -1;
+    var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
+
+    // update maps in router
+    router.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
+    router.outCircuitIDToCircuit.set(outCircuitID, circ);
   });
 
-  // on a created message we need to send a relay extend
   router.on('created', (contents, TCPRouterConn) => {
     router.circuitLength++;
+
     // update maps
     router.circuitID = contents["circuitID"]; //use the circuitID we used to create
     router.circuitIDToRouterID.set(contents["circuitID"], TCPRouterConn.destRouterID);
@@ -141,7 +146,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  instanceNum: the instanceNum of this router
 //  groupID: the id of our group, common to all of our routers
 //  id: (groupID << 16) || instanceNum
-//  openConns: map from routerIDs to TCPRouterConnections
+//  
 //  proxyListener: TCP server connection which receives initiations from
 //    browsers
 //  streamCount: count of streams we've made so far, start at 1
@@ -150,13 +155,14 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //    with the server when we go off the network
 //  inProxy: HTTP proxy for browser-router communications
 //  outProxy: HTTP proxy for router-server communications
-//  circuitMap: [inCircuitID, routerID] -> outCircuitID NOTE: if this is the
-//    end of the circuit then outCircuitID will be -1
 //  circuitCount: count of circuits we've seen so far
 //  circuitID: the circuit id this starts with
-//  circuitIDToRouterID: outCircuitID -> routerID 
 //  circuitLength: the current length of the circuit starting at this router
-//
+//  
+//  openConns: map from routerIDs to TCPRouterConnections
+//  inCircuitIDToOutCircuitID: a map from non-local circuitIDs to local circuitIDs
+//  outCircuitIDToCircuit: a map from local circuitIDs to circuit objects
+
 //  Port usage shall be as follows:
 //    port     | listener for connections with other Tor61 routers
 //    port + 1 | inProxy
@@ -179,10 +185,17 @@ function Router(port, groupID, instanceNum) {
 
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();
+
+  // Initialize inCircuitIDToOutCircuitID, a map which maps from global to local circuit ids
+  this.inCircuitIDToOutCircuitID = new Map();
+
+  // Initialize circuitLookup, a map from local circuit ids to circuit objects
+  this.outCircuitIDToCircuit = new Map();
+
   // Initialize circuitMap, a map of ingoing to outgoing circuit numbers
-  this.circuitMap = new Map();
+  // this.circuitMap = new Map();
   // Initialize circuitIDToRouterID, a map from circuit number to 
-  this.circuitIDToRouterID = new Map();
+  // this.circuitIDToRouterID = new Map();
 
   // STEP 0: bind a socket to listen on port
   this.routerListener = new connections.routerListener(this, port);
@@ -196,9 +209,25 @@ function Router(port, groupID, instanceNum) {
   }
 }
 
+// A Circuit object contains
+//  inCircuitID: the non-local circuitID
+//    -1 if circuit originates here
+//  outCircuitID: the local circuitID
+//    -1 if -1 if circuit ends here
+//  inRouterID: the incoming router on this circuit
+//    -1 if circuit originates here
+//  outRouterID: the outgoing router on this circuit
+//    -1 if circuit ends here
+function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
+  this.inCircuitID = inCircuitID;
+  this.outCircuitID = outCircuitID;
+  this.inRouterID = inRouterID;
+  this.outRouterID = outRouterID;
+}
+
 // established a circuit from router given a list of availableRouters to use in
 // the circuit.
-function createCircuit (router, tries) {
+function createCircuit (router, inCircuitID, inRouterID, tries) {
   if (tries < MAX_TRIES && router.availableRouters == null) {
     // wait a bit and try again
     setTimeout(createCircuit, TIMEOUT, router, tries + 1);
@@ -214,8 +243,12 @@ function createCircuit (router, tries) {
     // open a TCP connection with that router, if one doesn't already exist
     if (router.openConns.has(destRouter.get("data"))) {
       var conn = router.openConns.get(destRouter.get("data"));
+
+      var outCircuitID = makeCircuitID(router, TCPRouterConn);
+      var outRouterID = TCPRouterConn.destRouterID;
+      var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
       // try to create the next hop
-      conn.tryCreate(makeCircuitID(router, conn), 0); // wont work
+      conn.tryCreate(makeCircuitID(router, conn), 0);
     } else {
       var socket = new net.createConnection(destRouter.get("port"),
         destRouter.get("IP"));
