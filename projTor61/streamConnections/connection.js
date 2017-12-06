@@ -74,8 +74,9 @@ function processHeader(header) {
   return pHeader;
 }
 
-exports.clientConnection = function (proxy, socket) {
+exports.clientConnection = function (proxy, inStream, socket) {
   this.proxy = proxy;
+  this.inStream = inStream;
   this.socket = socket;
   this.header = null; // the full header, unaugmented
   this.pHeader = null; // the processed header object, contains augmented header

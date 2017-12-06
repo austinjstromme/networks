@@ -7,6 +7,7 @@ var cells = require('./cells');
 var connections = require('./connections');
 var stream = require('./stream');
 var registration = require('../proj1/clients');
+var proxy = require('./streamConnections/proxy');
 
 const TIMEOUT = 4000; // timeout in ms
 const MAX_TRIES = 5; // max tries
@@ -17,7 +18,7 @@ const CIRCUIT_LENGTH = 1; // desired circuit length
 // this is where all of the logic of the router is 
 exports.makeRouter = function (port, groupID, instanceNum) {
   const FETCH_COMMAND = ("f Tor61Router-" + groupID + "-");
-  const PROXY_PORT = port - 1; // this ok?
+  const PROXY_PORT = port + 1; // this ok?
 
   // first create a router object
   var router = new Router(port, groupID, instanceNum);
@@ -54,7 +55,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.agent.sendCommand(FETCH_COMMAND);
   });
 
-  // on a create message we put the router into our tables
+  // on a create message we put the router into our tables and make an outStream
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
     var cnt = router.circuitCount++;
@@ -62,6 +63,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       cnt);
     router.circuitIDToRouterID.set(cnt, TCPRouterConn.destRouterID);
   });
+
 
   // on a created message we need to send a relay extend
   router.on('created', () => {
@@ -83,19 +85,28 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // TODO: implement sending data
   });
 
+
+  router.on('relay', (contents, TCPRouterConn) => {
+    // STEP 0: determine if this is the end of the current circuit
+    var circ = router.circuitMap([contents["circuitID"],
+                                  TCPRouterConn.destRouterID]);
+    router.logger("got a relay message on circ = " + circ);
+    if (router.circuitMap([contents["circuitID"],
+                          TCPRouterConn.destRouterID]) == -1) {
+      router.logger("we've got a message for the end of the circuit!");
+
+      // TODO: handle
+    } else {
+      router.logger("handing off a relay");
+
+      
+    }
+  });
+
   router.on('circuitEstablished', () => {
     router.logger('circuit established, listening on ' + PROXY_PORT);
 
-    router.streams = [];
-    router.proxyListener = new net.createServer((socket) => {
-      // when a browser connects create a new stream
-      router.logger("received connection from a browser!");
-      router.streams[router.streams.length] = new stream.stream(router,
-        socket, router.streamCount++);
-    });
-
-    // bind to PROXY_PORT
-    router.proxyListener.listen(PROXY_PORT);
+    router.inProxy = stream.proxy.makeInProxy(router, PROXY_PORT);
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -118,7 +129,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 // A router object will contain
 //  agent: an Agent to handle registration
 //  availableRouters: list of available routers; null if none
-//  port: what we listen for router connections on 
+//  port: see below
 //  routerListener: TCP server connection which receives initiations from
 //    other routers
 //  instanceNum: the instanceNum of this router
@@ -131,13 +142,23 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  outStreams: map from streamID -> outStream, see stream.js. These are
 //    streams which end here. Need this map to look up the connection
 //    with the server when we go off the network
-//  circuitMap: [inCircuitID, routerID] -> outCircuitID
+//  inProxy: HTTP proxy for browser-router communications
+//  outProxy: HTTP proxy for router-server communications
+//  circuitMap: [inCircuitID, routerID] -> outCircuitID NOTE: if this is the
+//    end of the circuit then outCircuitID will be -1
 //  circuitCount: count of circuits we've seen so far
 //  circuitID: the circuit id this starts with
 //  circuitIDToRouterID: outCircuitID -> routerID 
 //  circuitLength: the current length of the circuit starting at this router
+//
+//  Port usage shall be as follows:
+//    port     | listener for connections with other Tor61 routers
+//    port + 1 | inProxy
+//    port + 2 | outProxy
+//    port + 3 | registrationAgent's port for agent -> service communications
+//    port + 4 | registrationAgent's port for service -> agent communications
 function Router(port, groupID, instanceNum) {
-  this.agent = new registration.registrationAgent(port + 1, this); // where did this port come from?
+  this.agent = new registration.registrationAgent(port + 3, this); // where did this port come from?
   this.port = port;
   this.groupID = groupID;
   this.instanceNum = instanceNum;
@@ -146,6 +167,8 @@ function Router(port, groupID, instanceNum) {
   this.circuitCount = 1; // Every circuit starts with the id of 1.
   this.id = (this.groupID << 16) || this.instanceNum;
   this.streamCount = 1; // Streams start at 1 (0 is reserved)
+  this.inProxy = null;
+  this.outProxy = new proxy.outProxy(router, port + 2);
 
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();
@@ -161,7 +184,7 @@ function Router(port, groupID, instanceNum) {
 
   this.logger = (data) => {
     if (LOGGING) {
-      console.log("Tor61Router " + this.id + ": " + data);
+      console.log("Tor61Router-" + this.id + ": " + data);
     }
   }
 }
