@@ -79,6 +79,28 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // look up the circuit
     var circ = router.outCircuitIDToCircuit(contents["circuitID"]);
 
+    // update the circuit
+    circ.outCircuitID = contents["circuitID"];
+    circ.outRouterID = TCPRouterConn.destRouterID;
+
+    // separate responses based on whether its our own circuit
+    if (circ.inCircuitID == -1) {
+      router.circuitLength++;
+      // save the fact that this is our own circuit
+      router.circuitID = contents["circuitID"]
+      // we initiated...
+      if (router.circuitLength < CIRCUIT_LENGTH) {
+        router.logger("EXTENDING...");
+        // do some sort of extension
+        circuitExtend(router, 0);
+      } else {
+        router.emit('circuitEstablished');
+      }
+    } else {
+      // we had gotten a relay extend and now it's worked, talk back
+      router.logger("DO RELAY EXTEND...");
+    }
+
     // update things
 
     // update maps
@@ -136,7 +158,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.agent.sendCommand("f Tor61Router-" + groupID + "-");
 
   // start trying to create a circuit
-  createCircuit(router, 0);
+  startCircuit(router, 0);
 
   // now that we've created the router, initiate create circuit
   return router;
@@ -242,32 +264,40 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
     if (router.openConns.has(outRouterID)) {
       var conn = router.openConns.get(outRouterID);
 
+      // make sure things are pointing correctly
       outCircuitID = makeCircuitID(outCircutID, conn);
+
+      router.outCircuitIDToCircuit(outCircuitID, circuit);
 
       // try to create the next hop
       conn.sendCreate(outCircuitID);
     } else {
-      var socket = new net.createConnection(port, IP),
+      var socket = new net.createConnection(port, IP);
+
+      router.logger("opening connection to " + port + " and " + IP);
 
       socket.on('connect', () => {
         router.logger("connected to " + outRouterID);
         var conn = new connections.TCPRouterConnection(router, socket,
           outRouterID);
 
+        // make sure things are pointing correctly
         outCircuitID = makeCircuitID(outCircutID, conn);
+
+        router.outCircuitIDToCircuit(outCircuitID, circuit);
 
         // try to create the next hop
         conn.sendCreate(outCircuitID, 0); // wont work
       });
 
       socket.on('timeout', () => {
-        router.logger("open to " outRouterID + " failed... malformed IP/port?");
+        router.logger("open to " + outRouterID + " failed... malformed IP/port?");
         // TODO: createFailed will take more arguments
         router.emit('createFailed', circuit);
       });
     }
 
-   setTimeout(extendCircuit,
+   setTimeout(reliableCreate,
               TIMEOUT,
               router,
               circuit,
@@ -276,7 +306,6 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
               IP,
               port,
               tries + 1);
-    }
   } else {
     // out of tries and still haven't created
     router.logger("create circuit failed after " + MAX_TRIES + " tries, fuck");
@@ -284,16 +313,31 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
   }
 }
 
+// start, reliable across fetchResponses
 function startCircuit(router, tries) {
-  // for now, we select a router from the list of available routers we've
-  // already gotten
-  destRouter = router.availableRouters[Math.floor(Math.random()
-                                        * router.availableRouters.length)];
+  if (router.circuitLength > 0) {
+    // done
+    return;
+  } else if (tries < MAX_TRIES) {
 
-  var circ = new Circuit(-1, -1, -1, -1);
-  // make our own circuitID
-  reliableCreate(router, circ, router.circuitID, parseInt(destRouter["data"]),
-    destRouter["IP"], parseInt(destRouter["port"]), 0);
+    if (router.availableRouters != null) {
+      // for now, we select a router from the list of available routers we've
+      // already gotten
+      destRouter = router.availableRouters[Math.floor(Math.random()
+                                          * router.availableRouters.length)];
+    
+      var circ = new Circuit(-1, -1, -1, -1);
+      // make our own circuitID
+      reliableCreate(router, circ, router.circuitID,
+                    parseInt(destRouter["data"]), destRouter["IP"],
+                    destRouter["port"], 0);
+    }
+
+    setTimeout(startCircuit, TIMEOUT, router, tries + 1);
+  } else {
+    router.logger("startCircuit is stuck at the first step");
+  }
+
 }
 
 // generate a circuitID to be used on this TCPConn.
