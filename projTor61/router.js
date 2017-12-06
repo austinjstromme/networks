@@ -99,7 +99,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       // TODO: handle
     } else {
       router.logger("handing off a relay");
-
       
     }
   });

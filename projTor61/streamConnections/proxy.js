@@ -21,7 +21,6 @@ exports.makeInProxy = function (router, port) {
   proxy.listen(port);
   router.logger('inProxy listening on ' + port);
 
-
   // when the stream has been successfully opened it emits an open event
   proxy.on('opened', (stream) => {
     var clientConn = stream.clientConn;

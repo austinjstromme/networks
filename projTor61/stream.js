@@ -76,6 +76,7 @@ exports.inStream = function (router, proxy, streamID) {
   this.send = function (data) {
     if (this.alive) {
       this.logger("sending data");
+      // TODO: this should be a bit less than 512 to account for the header
       for (var i = 0; i < (data.length/512 + 1); i++) {
         // chunk up the message and send it off
         this.router.emit('send', cells.CreateRelayCell(router.circuitID,
