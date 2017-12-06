@@ -44,36 +44,12 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   }
 
   // send create message
-  this.tryCreate = (circuitID, tries) => {
-    if (this.state == 4) {
-      // open has failed, ABORT
-      return;
-    }
-
-    if (tries == 0) {
-      if (this.state == 3) {
-        // connection is ready to go, start creating
-        this.socket.write(cells.createCreateCell(circuitID));
-        this.logger("SENT CREATE");
-        setTimeout(this.tryCreate, TIMEOUT, circuitID, tries + 1);
-      } else {
-        // connection is not ready, still waiting for an opened
-        setTimeout(this.tryCreate, TIMEOUT, circuitID, tries);
-      }
-    } else if (tries < MAX_TRIES) {
-      if (this.state == 2) {
-        // still waiting for a created, try again
-        this.socket.write(cells.createCreateCell(circuitID));
-        this.logger("SENT CREATE");
-        setTimeout(this.tryCreate, TIMEOUT, circuitID, tries + 1);
-      } else {
-        // we've heard back, so we're done!
-        return;
-      }
+  this.sendCreate = (circuitID) => {
+    if (this.state == 3) {
+      this.socket.write(cells.createCreateCell(circuitID));
+      this.logger("SENT CREATE");
     } else {
-      // hit max tries, and create has failed
-      router.emit("createFailed", this);
-      this.state = 3;
+      this.logger("DIDN'T SEND CREATE, TCPROUTERCONNECTION NOT UP YET");
     }
   }
 
@@ -101,6 +77,8 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
     } else if (contents["cmd"] == 3) {
       // CREATE FAILED
       this.logger("CREATE FAILED");
+      var circ = this.router.outCircuitIDToCircuit(contents["circuitID"]);
+      this.router.emit('createFailed', circ);
     } else if (contents["cmd"] == 4) {
       // DESTROY
       this.logger("DESTROY");
