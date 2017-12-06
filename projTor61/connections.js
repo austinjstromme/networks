@@ -13,6 +13,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   this.router = router;
   this.socket = socket;
   this.destRouterID = destRouterID;
+  this.forward = true; // forward in the directed Tor61 network by default
   // STATE:
   //  0: haven't sent or received anything
   //  1: sent an open, waiting for an opened
@@ -96,7 +97,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
     } else if (contents["cmd"] == 2) {
       // CREATED
       this.logger("CREATED");
-      this.router.emit('created');
+      this.router.emit('created', contents, this);
     } else if (contents["cmd"] == 3) {
       // CREATE FAILED
       this.logger("CREATE FAILED");
@@ -145,6 +146,7 @@ exports.routerListener = function (router, port) {
   var listener = new net.createServer((socket) => {
     router.logger("received connection from another router!");
     var conn = new exports.TCPRouterConnection(router, socket, null);
+    conn.forward = false; //this connection is backward in the network
   });
 
   listener.listen(port);

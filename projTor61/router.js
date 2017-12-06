@@ -44,6 +44,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.logger("OPENED");
     // save the router connection
     router.openConns.set(contents["openedID"], TCRRouterConn);
+
   });
 
   router.on('openFailed', () => {
@@ -59,16 +60,20 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   // on a create message we put the router into our tables and make an outStream
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
-    var cnt = router.circuitCount++;
+
+    // store the reverse direction
+    var cnt = makeCircuitID(router, TCPRouterConn);
     router.circuitMap.set([contents["circuitID"], TCPRouterConn.destRouterID],
       cnt);
     router.circuitIDToRouterID.set(cnt, TCPRouterConn.destRouterID);
   });
 
-
   // on a created message we need to send a relay extend
-  router.on('created', () => {
+  router.on('created', (contents, TCPRouterConn) => {
     router.circuitLength++;
+    // update maps
+    router.circuitID = contents["circuitID"]; //use the circuitID we used to create
+    router.circuitIDToRouterID.set(contents["circuitID"], TCPRouterConn.destRouterID);
     router.logger("CREATED");
 
     if (router.circuitLength < CIRCUIT_LENGTH) {
@@ -88,18 +93,19 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
 
   router.on('relay', (contents, TCPRouterConn) => {
-    var circ = router.circuitMap([contents["circuitID"],
+    var outgoingCirc = router.circuitMap([contents["circuitID"],
                                   TCPRouterConn.destRouterID]);
-    router.logger("got a relay message on circ = " + circ);
+    router.logger("got a relay message on circ = " + outgoingCirc);
     if (router.circuitMap([contents["circuitID"],
                           TCPRouterConn.destRouterID]) == -1) {
       // this is the end of the current circuit
       router.logger("we've got a message for the end of the circuit!");
 
       // TODO: handle
+
     } else {
       router.logger("handing off a relay");
-      
+
     }
   });
 
@@ -164,7 +170,8 @@ function Router(port, groupID, instanceNum) {
   this.instanceNum = instanceNum;
   this.availableRouters = null;
   this.circuitLength = 0; // The circuit is currently just this router
-  this.circuitCount = 1; // Every circuit starts with the id of 1.
+  this.circuitCount = 3; // Every circuit starts with the id of 1.
+  this.circuitID = 2; // the id of the circuit startting on this router
   this.id = (this.groupID << 16) || this.instanceNum;
   this.streamCount = 1; // Streams start at 1 (0 is reserved)
   this.inProxy = null;
@@ -208,8 +215,7 @@ function createCircuit (router, tries) {
     if (router.openConns.has(destRouter.get("data"))) {
       var conn = router.openConns.get(destRouter.get("data"));
       // try to create the next hop
-      conn.tryCreate(router.circuitCount, 0);
-      router.ciruitCount++;
+      conn.tryCreate(makeCircuitID(router, conn), 0); // wont work
     } else {
       var socket = new net.createConnection(destRouter.get("port"),
         destRouter.get("IP"));
@@ -219,7 +225,7 @@ function createCircuit (router, tries) {
         var conn = new connections.TCPRouterConnection(router, socket,
           destRouter.get("data"));
         // try to create the next hop
-        conn.tryCreate(router.circuitCount++, 0);
+        conn.tryCreate(makeCircuitID(router, conn), 0); // wont work
       });
 
       socket.on('timeout', () => {
@@ -248,6 +254,24 @@ function extendCircuit(router, tries) {
     conn.tryCreate(router.circuitCount, 0);
     router.ciruitCount++;
   }
+}
+
+// generate a circuitID to be used on this TCPConn.
+//   even if TCPConn is forward, odd otherwise.
+function makeCircuitID (router, TCPRouterConn) {
+  var cnt = router.circuitCount;
+  router.circuitCount += 2;
+  if (TCPRouterConn.forward) {
+    cnt += (cnt % 2); // make the circuitID even
+  } else {
+    cnt += ((cnt + 1) % 2); // make the circuitID odd
+  }
+  return cnt;
+}
+
+// shutdown function
+function shutDown(router) {
+  router.logger("Shutting down now....");
 }
 
 util.inherits(Router, events.EventEmitter);
