@@ -93,6 +93,7 @@ exports.makeInProxy = function (router, port) {
 }
 
 exports.makeOutProxy = function (router, port) {
+  console.log("port = " + port);
 
   var proxy = new net.createServer(function(socket) {
     var clientConn = new connection.clientConnection(proxy, socket);

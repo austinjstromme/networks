@@ -6,7 +6,7 @@ var util = require('util');
 var cells = require('./cells');
 var connections = require('./connections');
 var stream = require('./stream');
-var registration = require('../proj1/clients');
+var registration = require('../proj1/client');
 var proxy = require('./streamConnections/proxy');
 
 const TIMEOUT = 4000; // timeout in ms
@@ -22,6 +22,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   // first create a router object
   var router = new Router(port, groupID, instanceNum);
+  router.outProxy = proxy.makeOutProxy(router, port + 2);
 
   router.on('fetchResponse', (fetchResult) => {
     if (fetchResult.length == 0) {
@@ -87,12 +88,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
 
   router.on('relay', (contents, TCPRouterConn) => {
-    // STEP 0: determine if this is the end of the current circuit
     var circ = router.circuitMap([contents["circuitID"],
                                   TCPRouterConn.destRouterID]);
     router.logger("got a relay message on circ = " + circ);
     if (router.circuitMap([contents["circuitID"],
                           TCPRouterConn.destRouterID]) == -1) {
+      // this is the end of the current circuit
       router.logger("we've got a message for the end of the circuit!");
 
       // TODO: handle
@@ -106,7 +107,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('circuitEstablished', () => {
     router.logger('circuit established, listening on ' + PROXY_PORT);
 
-    router.inProxy = stream.proxy.makeInProxy(router, PROXY_PORT);
+    router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -168,7 +169,7 @@ function Router(port, groupID, instanceNum) {
   this.id = (this.groupID << 16) || this.instanceNum;
   this.streamCount = 1; // Streams start at 1 (0 is reserved)
   this.inProxy = null;
-  this.outProxy = new proxy.outProxy(router, port + 2);
+  this.outProxy = null;
 
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();

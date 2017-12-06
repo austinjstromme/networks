@@ -3,7 +3,7 @@ var router = require("./router.js");
 var events = require('events');
 
 // port to bind this to
-const PORT = process.argv[2];
+const PORT = parseInt(process.argv[2]);
 
 // group id
 const GROUPID = 1035;
