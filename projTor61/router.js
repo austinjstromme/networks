@@ -12,7 +12,7 @@ var proxy = require('./streamConnections/proxy');
 const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 5; // max tries
 const LOGGING = true;
-const CIRCUIT_LENGTH = 1; // desired circuit length
+const CIRCUIT_LENGTH = 2; // desired circuit length
 
 // returns a fresh router binded to this port
 // this is where all of the logic of the router is 
@@ -62,11 +62,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
     // create a circuit object
     var inCircuitID = contents["circuitID"];
-    var inRouterID = contents["routerID"];
+    var inRouterID = TCPRouterConn.destRouterID;
     var outCircuitID = makeCircuitID(router.circuitCount, TCPRouterConn);
     router.circuitCount += 2;
     var outRouterID = -1;
     var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
+    console.log(circ);
 
     // update maps in router
     router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
@@ -79,13 +80,14 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.logger("CREATED");
     // look up the circuit
     var circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
+    console.log(circ);
 
     // update the circuit
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
 
     // separate responses based on whether its our own circuit
-    if (circ.inCircuitID == -1) {
+    if (circ.inRouterID == -1) {
       router.circuitLength++;
       // save the fact that this is our own circuit
       router.circuitID = contents["circuitID"]
@@ -93,13 +95,17 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       if (router.circuitLength < CIRCUIT_LENGTH) {
         router.logger("EXTENDING...");
         // do some sort of extension
-        circuitExtend(router, 0);
+        extendOurCircuit(router);
+
       } else {
         router.emit('circuitEstablished');
       }
     } else {
       // we had gotten a relay extend and now it's worked, talk back
-      router.logger("DO RELAY EXTEND...");
+      router.logger("DO RELAY EXTENDED...");
+      // send a relay extended back
+      var cell = cells.createRelayCell(circ.inCircuitID, 0x0, 0x07, '');
+      router.openConns.get(circ.inRouterID).socket.write(cell);
     }
   });
 
@@ -133,7 +139,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
     if (circ.outRouterID == -1) { // we are the end of the circuit
       router.logger("we've got a message for the end of the circuit!");
-      //console.log(contents);
       if (contents['relayCmd'] == 0x01) {  // begin
         // TODO: do what we need to here to save some sort of outStream
         // send back that we've connected
@@ -148,16 +153,20 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       } else if (contents['relayCmd'] == 0x04) { // connected
         router.logger("UNEXPECTED: connected at end of circuit");
       } else if (contents['relayCmd'] == 0x06) { // extend request
+
+        router.logger("got extend request for end of circuit");
         contents['body']; // ip:port\0<agent id>
-        var agentID = contents['body'].split('\0')[1];
+        var agentID = parseInt(contents['body'].split('\0')[1]);
         var tokens = contents['body'].split('\0')[0].split(':');
         var IP = tokens[0];
+
         for (var i = 1; i < tokens.length - 1; i++) {
           IP += (":" + tokens[i]);
         }
-        var port = tokens[-1];
+        var port = tokens[tokens.length - 1];
 
         reliableCreate(router, circ, outCircuitID, agentID, IP, port, 0);
+
       } else if (contents['relayCmd'] == 0x07) { // extended
         router.logger("UNEXPECTED: extended at end of circuit");
       } else if (contents['relayCmd'] == 0x0b) { // begin failed
@@ -182,7 +191,15 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       } else if (contents['relayCmd'] == 0x06) { // extend request
         router.logger("UNEXPECTED: extend at begin of circuit");
       } else if (contents['relayCmd'] == 0x07) { // extended
-        // extend succeeded - do something
+        router.logger("RELAY EXTENDED!");
+        router.circuitLength++;
+        if (router.circuitLength < CIRCUIT_LENGTH) {
+          router.logger("EXTENDING...");
+          // do some sort of extension
+          extendOurCircuit(router);
+        } else {
+          router.emit('circuitEstablished');
+        }
       } else if (contents['relayCmd'] == 0x0b) { // begin failed
         // begin failed - emit an openFailed for the inStream
         var inStream = router.inStreamIDToInStream.get(contents['streamID']);
@@ -193,9 +210,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         router.emit('extendCircuitFailed');
       }
     } else { // hand off the relay
+      console.log(circ.inRouterID);
       router.logger("handing off a relay");
       var outRouterID = circ.outRouterID;
-      var msg = createRelayCell(outCircuitID, contents['streamID'], contents['relayCmd'], contents['body']);
+      var msg = cells.createRelayCell(outCircuitID, contents['streamID'], contents['relayCmd'], contents['body']);
       var conn = router.openConns.get(outRouterID);
       conn.socket.write(msg); // send the relay along
     }
@@ -209,11 +227,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   // emitted when our extend circuit failed for one reason or another
   router.on('extendCircuitFailed', () => {
     // TODO: implement
+    router.logger('EXTEND CIRCUIT FAILED');
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
   router.on('createFailed', (TCPRouterConnection) => {
-    console.log("failed to create a TCP connection with " + TCPRouterConnection.destRouterID);
+    router.logger("failed to create a TCP connection with " + TCPRouterConnection.destRouterID);
     // probably want to kick off the create again with another fetch?
     // router.agent.sendCommand("f Tor61Router-" + groupID + "-" + instanceNum);
   });
@@ -223,7 +242,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   // start trying to create a circuit, starting with us
   var circ = new Circuit(-1, -1, -1, -1);
-  extendCircuit(router, circ, 0);
+  makeFirstHop(router, circ, 0);
 
   // now that we've created the router, initiate create circuit
   return router;
@@ -376,7 +395,8 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
   }
 }
 
-function extendCircuit(router, circuit, tries) {
+// establish the first link in the circuit originating on this router
+function makeFirstHop(router, circuit, tries) {
   if (router.availableRouters != null) {
     // for now, we select a router from the list of available routers we've
     // already gotten
@@ -386,13 +406,41 @@ function extendCircuit(router, circuit, tries) {
     reliableCreate(router, circuit, router.circuitID,
                   parseInt(destRouter.get('data')), destRouter.get('IP'),
                   destRouter.get('port'), 0);
+
   } else if (tries < MAX_TRIES) {
     // see if we've gotten some routers back from reg agent in TIMEOUT
-    setTimeout(extendCircuit, TIMEOUT, router, circuit, tries + 1);
+    setTimeout(makeFirstHop, TIMEOUT, router, circuit, tries + 1);
   } else {
     // no router back from reg agent after MAX_TRIES tries
     router.logger("no fetchResponse to start making circuit with");
   }
+}
+
+
+function reliableExtend (router, body, oldLength, tries) {
+  
+  if (router.circuitLength == oldLength + 1) {
+    return;
+  } else if (tries < MAX_TRIES) {
+
+    // circuitID, streamID, relayCmd, body
+    var relayExtendCell = cells.createRelayCell(router.circuitID, 0x00, 0x06, body);
+    router.emit('send', relayExtendCell);
+
+    setTimeout(reliableExtend, TIMEOUT * 3, body, oldLength, tries + 1);
+
+  } else { 
+    router.emit('extendCircuitFailed');
+  }
+}
+
+function extendOurCircuit (router) {
+  destRouter = router.availableRouters[Math.floor(Math.random()
+                                          * router.availableRouters.length)];
+
+  var body = destRouter.get('IP') + ":" + destRouter.get('port') + '\0' + destRouter.get('data');
+
+  reliableExtend(router, body, router.circuitLength, 0);
 }
 
 // generate a circuitID to be used on this TCPConn.

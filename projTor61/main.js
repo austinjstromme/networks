@@ -8,5 +8,6 @@ const PORT = parseInt(process.argv[2]);
 // group id
 const GROUPID = 1035;
 
-//r2 = router.makeRouter(PORT + 10, GROUPID, 0001);
+
 r1 = router.makeRouter(PORT, GROUPID, 0001);
+// r2 = router.makeRouter(PORT + 10, GROUPID, 0002);
