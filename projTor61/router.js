@@ -56,7 +56,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.agent.sendCommand(FETCH_COMMAND);
   });
 
-  // on a create message we put the router into our tables and make an outStream
+  // on a create message we update our tables accordingly
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
 
