@@ -13,6 +13,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   this.router = router;
   this.socket = socket;
   this.destRouterID = destRouterID;
+  //this.buffer = new Buffer();
   this.forward = true; // forward in the directed Tor61 network by default
   // STATE:
   //  0: haven't sent or received anything
@@ -54,11 +55,18 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   }
 
   socket.on("data", (data) => {
-    // parse data using cells, need to do some buffering
-    if (data.length != 512) {
-      this.logger("data on the socket is " + data.length + "bytes long")
+    var s = data.toString('ascii');
+    if (s.length % 512 != 0) {
+      this.logger("MALFORMED DATA (" + s.length + " bytes)");
+    } else {
+      for (var i = 0; i < s.length/512; i++) {
+        this.handleCell(s.substr(i*512, (i + 1)*512));
+      }
     }
-    var contents = cells.parseCell(data);
+  });
+
+  this.handleCell = (cell) => {
+    var contents = cells.parseCell(cell);
 
     if (!contents["valid"]) {
       this.logger("CORRUPT CELL");
@@ -109,7 +117,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
       // RELAY
       this.logger("RELAY");
     }
-  });
+  }
 
   // only try open if we are the ones opening
   if (this.destRouterID != null) {

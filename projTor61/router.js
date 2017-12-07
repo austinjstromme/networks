@@ -9,7 +9,7 @@ var stream = require('./stream');
 var registration = require('../proj1/client');
 var proxy = require('./streamConnections/proxy');
 
-const TIMEOUT = 4000; // timeout in ms
+const TIMEOUT = 8000; // timeout in ms
 const MAX_TRIES = 5; // max tries
 const LOGGING = true;
 const CIRCUIT_LENGTH = 1; // desired circuit length
@@ -74,12 +74,13 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   });
 
   router.on('created', (contents, TCPRouterConn) => {
-    router.circuitLength++;
+    router.logger("created, circuitLength = " + router.circuitLength);
 
     // look up the circuit
-    var circ = router.outCircuitIDToCircuit(contents["circuitID"]);
+    var circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
 
     // update the circuit
+    console.log("updating out circuit id");
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
 
@@ -99,20 +100,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     } else {
       // we had gotten a relay extend and now it's worked, talk back
       router.logger("DO RELAY EXTEND...");
-    }
-
-    // update things
-
-    // update maps
-    router.circuitID = contents["circuitID"]; //use the circuitID we used to create
-    router.circuitIDToRouterID.set(contents["circuitID"], TCPRouterConn.destRouterID);
-    router.logger("CREATED");
-
-    if (router.circuitLength < CIRCUIT_LENGTH) {
-      router.logger("EXTENDING...");
-      circuitExtend(router, 0);
-    } else {
-      router.emit('circuitEstablished');
     }
   });
 
@@ -144,7 +131,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('circuitEstablished', () => {
     router.logger('circuit established, listening on ' + PROXY_PORT);
 
-    router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
+    //router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -260,14 +247,15 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
     // done
     return;
   } else if (tries < MAX_TRIES) {
+    router.logger("sending another create, try " + tries);
     // open a TCP connection with that router, if one doesn't already exist
     if (router.openConns.has(outRouterID)) {
       var conn = router.openConns.get(outRouterID);
 
       // make sure things are pointing correctly
-      outCircuitID = makeCircuitID(outCircutID, conn);
+      outCircuitID = makeCircuitID(outCircuitID, conn);
 
-      router.outCircuitIDToCircuit(outCircuitID, circuit);
+      router.outCircuitIDToCircuit.set(outCircuitID, circuit);
 
       // try to create the next hop
       conn.sendCreate(outCircuitID);
@@ -282,9 +270,9 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
           outRouterID);
 
         // make sure things are pointing correctly
-        outCircuitID = makeCircuitID(outCircutID, conn);
+        outCircuitID = makeCircuitID(outCircuitID, conn);
 
-        router.outCircuitIDToCircuit(outCircuitID, circuit);
+        router.outCircuitIDToCircuit.set(outCircuitID, circuit);
 
         // try to create the next hop
         conn.sendCreate(outCircuitID, 0); // wont work
@@ -319,7 +307,7 @@ function startCircuit(router, tries) {
     // done
     return;
   } else if (tries < MAX_TRIES) {
-
+    router.logger("trying to createCircuit");
     if (router.availableRouters != null) {
       // for now, we select a router from the list of available routers we've
       // already gotten
@@ -327,10 +315,11 @@ function startCircuit(router, tries) {
                                           * router.availableRouters.length)];
     
       var circ = new Circuit(-1, -1, -1, -1);
+
       // make our own circuitID
       reliableCreate(router, circ, router.circuitID,
-                    parseInt(destRouter["data"]), destRouter["IP"],
-                    destRouter["port"], 0);
+                    parseInt(destRouter.get('data')), destRouter.get('IP'),
+                    destRouter.get('port'), 0);
     }
 
     setTimeout(startCircuit, TIMEOUT, router, tries + 1);
