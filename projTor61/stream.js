@@ -82,16 +82,13 @@ function inStream(router, proxy, streamID) {
   // non-reliable send for this stream; requires this.alive
   this.send = function (data) {
     if (this.alive) {
-      this.logger("sending data");
       // TODO: this should be a bit less than 512 to account for the header
       for (var i = 0; i < (data.length/512); i++) {
         var chunk = data.substr(i*512, (i + 1)*512);
-        this.logger("sending chunk of size = " + chunk.length);
-        // chunk up the message and send it off
-        this.router.emit('send', cells.createRelayCell(router.circuitID,
-                                                       this.streamID,
-                                                       2,
-                                                       chunk));
+        var cell = cells.createRelayCell(router.circuitID, this.streamID,
+          2, chunk);
+        
+        this.router.emit('send', cell);
       }
     } else {
       this.logger("mayday mayday stream isn't alive but is being sent over!");

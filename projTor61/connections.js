@@ -83,7 +83,6 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
       this.logger("CREATED");
       this.router.emit('created', contents, this);
     } else if (contents["cmd"] == 3) {
-      console.log("emitting a relay");
       // RELAY
       this.logger("RELAY");
       router.emit('relay', contents, this);

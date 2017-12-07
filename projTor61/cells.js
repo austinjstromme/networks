@@ -48,7 +48,6 @@ exports.parseCell = function (cell) {
     contents["streamID"] = bufCell.readUInt16BE(3);
     contents["relayCmd"] = bufCell.readUInt8(13);
     var bodyLength = bufCell.readUInt16BE(11);
-    console.log("on receipt, find bodyLength = " + bodyLength);
     contents["body"] = bufCell.toString('ascii', 14, 14 + bodyLength);
     contents["valid"] = true;
     return contents;
@@ -143,8 +142,6 @@ exports.createRelayCell = function (circuitID, streamID, relayCmd, body) {
   if ((body.length + 14) > 512) {
     console.log("malformed body to createRelayCell!");
   }
-
-  body = Buffer.from(body, 'ascii');
 
   // starts 0-initialized
   var buf = Buffer.alloc(512);

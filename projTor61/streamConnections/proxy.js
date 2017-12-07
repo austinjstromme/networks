@@ -59,6 +59,7 @@ exports.makeInProxy = function (router, port) {
     }
   
     if (clientConn.inStream.alive) {
+      body = body.toString('ascii');
       console.log("writing onto tor network " + body.length + " bytes");
       // forward it on with correct encoding
       clientConn.inStream.send(body.toString('ascii'));

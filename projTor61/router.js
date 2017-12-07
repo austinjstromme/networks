@@ -133,7 +133,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
     if (circ.outRouterID == -1) { // we are the end of the circuit
       router.logger("we've got a message for the end of the circuit!");
+      //console.log(contents);
       if (contents['relayCmd'] == 0x01) {  // begin
+        // TODO: do what we need to here to save some sort of outStream
         // send back that we've connected
         TCPRouterConn.socket.write(cells.createRelayCell(contents["circuitID"],
                                                   contents["streamID"],
