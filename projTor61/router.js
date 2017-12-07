@@ -9,7 +9,7 @@ var stream = require('./stream');
 var registration = require('../proj1/client');
 var proxy = require('./streamConnections/proxy');
 
-const TIMEOUT = 8000; // timeout in ms
+const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 5; // max tries
 const LOGGING = true;
 const CIRCUIT_LENGTH = 1; // desired circuit length
@@ -43,8 +43,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('opened', (contents, TCPRouterConn) => {
     router.logger("OPENED");
     // save the router connection
-    router.openConns.set(contents["openedID"], TCRRouterConn);
-
+    router.openConns.set(contents["openedID"], TCPRouterConn);
   });
 
   router.on('openFailed', () => {
@@ -74,13 +73,11 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   });
 
   router.on('created', (contents, TCPRouterConn) => {
-    router.logger("created, circuitLength = " + router.circuitLength);
-
+    router.logger("CREATED");
     // look up the circuit
     var circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
 
     // update the circuit
-    console.log("updating out circuit id");
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
 
@@ -247,7 +244,6 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
     // done
     return;
   } else if (tries < MAX_TRIES) {
-    router.logger("sending another create, try " + tries);
     // open a TCP connection with that router, if one doesn't already exist
     if (router.openConns.has(outRouterID)) {
       var conn = router.openConns.get(outRouterID);
@@ -261,8 +257,6 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
       conn.sendCreate(outCircuitID);
     } else {
       var socket = new net.createConnection(port, IP);
-
-      router.logger("opening connection to " + port + " and " + IP);
 
       socket.on('connect', () => {
         router.logger("connected to " + outRouterID);
@@ -303,30 +297,24 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
 
 // start, reliable across fetchResponses
 function startCircuit(router, tries) {
-  if (router.circuitLength > 0) {
-    // done
-    return;
-  } else if (tries < MAX_TRIES) {
-    router.logger("trying to createCircuit");
-    if (router.availableRouters != null) {
-      // for now, we select a router from the list of available routers we've
-      // already gotten
-      destRouter = router.availableRouters[Math.floor(Math.random()
+  if (router.availableRouters != null) {
+    // for now, we select a router from the list of available routers we've
+    // already gotten
+    destRouter = router.availableRouters[Math.floor(Math.random()
                                           * router.availableRouters.length)];
     
-      var circ = new Circuit(-1, -1, -1, -1);
+    var circ = new Circuit(-1, -1, -1, -1);
 
-      // make our own circuitID
-      reliableCreate(router, circ, router.circuitID,
-                    parseInt(destRouter.get('data')), destRouter.get('IP'),
-                    destRouter.get('port'), 0);
-    }
-
+    reliableCreate(router, circ, router.circuitID,
+                  parseInt(destRouter.get('data')), destRouter.get('IP'),
+                  destRouter.get('port'), 0);
+  } else if (tries < MAX_TRIES) {
+    // see if we've gotten some routers back from reg agent in TIMEOUT
     setTimeout(startCircuit, TIMEOUT, router, tries + 1);
   } else {
-    router.logger("startCircuit is stuck at the first step");
+    // no router back from reg agent after MAX_TRIES tries
+    router.logger("no fetchResponse to start making circuit with");
   }
-
 }
 
 // generate a circuitID to be used on this TCPConn.

@@ -3,7 +3,7 @@ var cells = require('./cells');
 
 const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 3; // max tries
-const LOGGING = true;
+const LOGGING = false;
 
 // An object containing a TCP connection between two routers. Handles incoming
 //	  and outgoing cells on this connection.
@@ -50,7 +50,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
       this.socket.write(cells.createCreateCell(circuitID));
       this.logger("SENT CREATE");
     } else {
-      this.logger("DIDN'T SEND CREATE, TCPROUTERCONNECTION NOT UP YET");
+      //this.logger("DIDN'T SEND CREATE, TCPROUTERCONNECTION NOT UP YET");
     }
   }
 
@@ -109,6 +109,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
         // waiting for this
         this.state = 3;
       }
+      this.router.emit('opened', contents, this);
     } else if (contents["cmd"] == 7) {
       // OPEN FAILED
       this.logger("OPEN FAILED");
@@ -130,7 +131,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
 //    other routers. 
 exports.routerListener = function (router, port) {
   var listener = new net.createServer((socket) => {
-    router.logger("received connection from another router!");
+    //router.logger("received connection from another router!");
     var conn = new exports.TCPRouterConnection(router, socket, null);
     conn.forward = false; //this connection is backward in the network
   });
