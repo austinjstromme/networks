@@ -31,7 +31,7 @@ exports.parseCell = function (cell) {
   contents["cmd"] = bufCell.readUInt8(2);
 
   if (contents["cmd"] == 0x01 || contents["cmd"] == 0x02
-    || contents["cmd"] == 0x03 || contents["cmd"] == 0x04) {
+    || contents["cmd"] == 0x08 || contents["cmd"] == 0x04) {
     contents["valid"] = true;
     return contents;
   }
@@ -48,6 +48,7 @@ exports.parseCell = function (cell) {
     contents["streamID"] = bufCell.readUInt16BE(3);
     contents["relayCmd"] = bufCell.readUInt8(13);
     var bodyLength = bufCell.readUInt16BE(11);
+    console.log("on receipt, find bodyLength = " + bodyLength);
     contents["body"] = bufCell.toString('ascii', 14, 14 + bodyLength);
     contents["valid"] = true;
     return contents;
@@ -143,6 +144,8 @@ exports.createRelayCell = function (circuitID, streamID, relayCmd, body) {
     console.log("malformed body to createRelayCell!");
   }
 
+  body = Buffer.from(body, 'ascii');
+
   // starts 0-initialized
   var buf = Buffer.alloc(512);
 
@@ -151,7 +154,9 @@ exports.createRelayCell = function (circuitID, streamID, relayCmd, body) {
   buf.writeUInt16BE(streamID, 3);
   buf.writeUInt16BE(body.length, 11);
   buf.writeUInt8(relayCmd, 13);
-  buf.write(body, 'ascii', 14);
+  if (body.length > 0) {
+    buf.write(body, 14);
+  }
 
   return buf.toString('ascii');
 }

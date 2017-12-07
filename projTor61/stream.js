@@ -1,6 +1,8 @@
 var net = require('net');
 var streamConnections = require('./streamConnections/connection');
 var cells = require('./cells');
+var util = require('util');
+var events = require('events');
 
 const TIMEOUT = 3000;
 const MAX_TRIES = 4;
@@ -9,28 +11,33 @@ const LOGGING = true;
 exports.makeInStream = function (router, proxy, streamID) {
   var stream = new inStream(router, proxy, streamID);
 
+  // save it in the routing tables
+  router.inStreamIDToInStream.set(streamID, stream);
+
   stream.on('opened', () => {
     stream.logger("we're up and alive!");
     stream.alive = true;
 
-    stream.proxy.emit('opened', this);
+    stream.proxy.emit('opened', stream);
   });
 
   stream.on('openFailed', () => {
     stream.logger("open failed!");
 
-    stream.proxy.emit('openFailed', this);
+    stream.proxy.emit('openFailed', stream);
   });
 
   stream.on('response', (data) => {
-    stream.logger("received response from the server");
+    stream.logger("received response from the server on inStream");
 
-    stream.proxy.emit('serverBody', this, data);
+    stream.proxy.emit('serverBody', stream, data);
   });
+
+  return stream;
 }
 
 // object encapsulating the browser-router interface
-exports.inStream = function (router, proxy, streamID) {
+function inStream(router, proxy, streamID) {
   // A stream object will contain
   //  router: reference to the router
   //  proxy: reference to InProxy
@@ -46,27 +53,27 @@ exports.inStream = function (router, proxy, streamID) {
   this.alive = false;
 
   this.logger = function (data) {
-    console.log("stream " + streamID + " at Tor61 router " + router.id
-      + ": "+ data);
+    console.log("Tor61Router-" + router.id + "-Stream-" + this.streamID
+      + ": " + data);
   }
 
   // reliable open for this stream
-  this.open = function (addr, tries) {
+  this.open = (addr, tries) => {
     if (this.alive) {
       // we're open! so done
       return;
     } else {
-      if (this.tries < MAX_TRIES) {
+      if (tries < MAX_TRIES) {
         this.logger("trying to open to " + addr);
-        // send off a open stream cell
-        this.router.send(cells.createRelayCell(router.circuitID,
-                                               this.streamID,
-                                               1,
-                                               addr));
+        // send off a begin stream cell
+        this.router.emit('send', cells.createRelayCell(router.circuitID,
+                                                       this.streamID,
+                                                       0x01,
+                                                       addr));
         // check back in TIMEOUT
         setTimeout(this.open, TIMEOUT, addr, tries + 1);
       } else {
-        this.logger("ran out of tires trying to open");
+        this.logger("ran out of tries trying to open");
         return;
       }
     }
@@ -77,12 +84,14 @@ exports.inStream = function (router, proxy, streamID) {
     if (this.alive) {
       this.logger("sending data");
       // TODO: this should be a bit less than 512 to account for the header
-      for (var i = 0; i < (data.length/512 + 1); i++) {
+      for (var i = 0; i < (data.length/512); i++) {
+        var chunk = data.substr(i*512, (i + 1)*512);
+        this.logger("sending chunk of size = " + chunk.length);
         // chunk up the message and send it off
-        this.router.emit('send', cells.CreateRelayCell(router.circuitID,
+        this.router.emit('send', cells.createRelayCell(router.circuitID,
                                                        this.streamID,
                                                        2,
-                                                       data.substr(i*512, (i + 1)*512)));
+                                                       chunk));
       }
     } else {
       this.logger("mayday mayday stream isn't alive but is being sent over!");
@@ -94,23 +103,23 @@ exports.inStream = function (router, proxy, streamID) {
 exports.makeOutStream = function (router, proxy, streamID) {
   var stream = new outStream(router, proxy, streamID);
 
-  stream.on('opened', () => {
+  stream.on('connected', () => {
     stream.logger("we're up and alive!");
     stream.alive = true;
 
-    stream.proxy.emit('opened', this);
+    stream.router.emit('connected', stream);
   });
 
-  stream.on('openFailed', () => {
-    stream.logger("open failed!");
+  stream.on('connectFailed', () => {
+    stream.logger("connect to server failed!");
 
-    stream.proxy.emit('openFailed', this);
+    stream.router.emit('beginFailed', stream);
   });
 
   stream.on('response', (data) => {
-    stream.logger("received response from the server");
+    stream.logger("received response from the server on outStream");
 
-    stream.proxy.emit('serverBody', this, data);
+    stream.router.emit('serverBody', stream, data);
   });
 }
 
@@ -135,7 +144,6 @@ exports.outStream = function (router, proxy, streamID) {
       + ": "+ data);
   }
 
-  // reliable open for this stream
   this.open = function (addr, tries) {
     if (this.alive) {
       // we're open! so done
@@ -173,3 +181,5 @@ exports.outStream = function (router, proxy, streamID) {
     }
   }
 }
+
+util.inherits(inStream, events.EventEmitter);

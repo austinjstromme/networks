@@ -63,12 +63,15 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // create a circuit object
     var inCircuitID = contents["circuitID"];
     var inRouterID = contents["routerID"];
-    var outCircuitID = makeCircuitID(router, TCPRouterConn);
+    var outCircuitID = makeCircuitID(router.circuitCount, TCPRouterConn);
+    router.circuitCount += 2;
     var outRouterID = -1;
     var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
 
     // update maps in router
+    router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
     router.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
+    router.logger("setting outCircuitIDToCircuit | " + outCircuitID + ":" + circ);
     router.outCircuitIDToCircuit.set(outCircuitID, circ);
   });
 
@@ -102,24 +105,47 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   router.on('send', (data) => {
     // sends data along our circuit
-    router.logger("attemping to send data over our circuit");
 
-    // TODO: implement sending data
+    var outRouterID =
+      router.outCircuitIDToCircuit.get(router.circuitID).outRouterID;
+    var conn = router.openConns.get(outRouterID);
+
+    conn.socket.write(data);
   });
 
-
   router.on('relay', (contents, TCPRouterConn) => {
+    // This trick allows us to look up which way the message is going
+    var forwards = true; // true if this message is going forwards along the
+      // circuit
+    if ((((contents["circuitID"] % 2) == 0) && TCPRouterConn.forward)
+        || (((contents["circuitID"] % 2) == 1) && !TCPRouterConn.forward)) {
+        forwards = false;
+    }
 
-    var outgoingCircID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
-    var circ = router.circuitLookup.get(outgoingCirc);
+    var circ;
 
-    router.logger("got a relay message on circ = " + outgoingCirc);
+    if (forwards) {
+      var outCircuitID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+      circ = router.outCircuitIDToCircuit.get(outCircuitID);
+    } else {
+      circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
+    }
 
-    // we are the end of the circuit
-    if (outgoingCirc == -1) {
+    if (circ.outRouterID == -1) { // we are the end of the circuit
       router.logger("we've got a message for the end of the circuit!");
-      if (contents['relayCmd'] == 0x06) { //it's an extend message
-
+      if (contents['relayCmd'] == 0x01) {  // begin
+        // send back that we've connected
+        TCPRouterConn.socket.write(cells.createRelayCell(contents["circuitID"],
+                                                  contents["streamID"],
+                                                  0x04,
+                                                  ""));
+      } else if (contents['relayCmd'] == 0x02) { // stream data
+        router.logger("received body with length = " + contents['body'].length);
+      } else if (contents['relayCmd'] == 0x03) { // end request
+        // TODO: implement
+      } else if (contents['relayCmd'] == 0x04) { // connected
+        router.logger("UNEXPECTED: connected at end of circuit");
+      } else if (contents['relayCmd'] == 0x06) { // extend request
         contents['body']; // ip:port\0<agent id>
         var agentID = contents['body'].split('\0')[1];
         var tokens = contents['body'].split('\0')[0].split(':');
@@ -129,26 +155,58 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         }
         var port = tokens[-1];
 
-        reliableCreate(router, circ, outgoingCircID, agentID, IP, port, 0);
+        reliableCreate(router, circ, outCircuitID, agentID, IP, port, 0);
+      } else if (contents['relayCmd'] == 0x07) { // extended
+        router.logger("UNEXPECTED: extended at end of circuit");
+      } else if (contents['relayCmd'] == 0x0b) { // begin failed
+        router.logger("UNEXPECTED: begin failed at end of circuit");
+      } else if (contents['relayCmd'] == 0x0c) { // extend failed
+        router.logger("UNEXPECTED: extend failed at end of circuit");
       }
 
-
+    } else if (circ.inRouterID == -1) { // we are the beginning of the circuit
+      router.logger("we've got a message for the begin of the circuit!");
+      if (contents['relayCmd'] == 0x01) { // begin
+        router.logger("UNEXPECTED: connect at begin of circuit");
+      } else if (contents['relayCmd'] == 0x02) { // stream data
+        router.logger("UNEXPECTED: stream data at begin of circuit");
+      } else if (contents['relayCmd'] == 0x03) { // end request
+        router.logger("UNEXPECTED: end at begin of circuit");
+      } else if (contents['relayCmd'] == 0x04) { // connected
+        router.logger("received a connected");
+        // begin succeeded - emit an opened for the inStream
+        var inStream = router.inStreamIDToInStream.get(contents['streamID']);
+        inStream.emit('opened');
+      } else if (contents['relayCmd'] == 0x06) { // extend request
+        router.logger("UNEXPECTED: extend at begin of circuit");
+      } else if (contents['relayCmd'] == 0x07) { // extended
+        // extend succeeded - do something
+      } else if (contents['relayCmd'] == 0x0b) { // begin failed
+        // begin failed - emit an openFailed for the inStream
+        var inStream = router.inStreamIDToInStream.get(contents['streamID']);
+        router.delete(contents['streamID']);
+        inStream.emit('openFailed');
+      } else if (contents['relayCmd'] == 0x0c) { // extend failed
+        // extend failed - do something
+        router.emit('extendCircuitFailed');
+      }
     } else { // hand off the relay
-      
       router.logger("handing off a relay");
       var outRouterID = circ.outRouterID;
-      var msg = createRelayCell(outgoingCircID, contents['streamID'], contents['relayCmd'], contents['body']);
+      var msg = createRelayCell(outCircuitID, contents['streamID'], contents['relayCmd'], contents['body']);
       var conn = router.openConns.get(outRouterID);
       conn.socket.write(msg); // send the relay along
-
     }
 
   });
 
   router.on('circuitEstablished', () => {
-    router.logger('circuit established, listening on ' + PROXY_PORT);
+    router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
+  });
 
-    //router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
+  // emitted when our extend circuit failed for one reason or another
+  router.on('extendCircuitFailed', () => {
+    // TODO: implement
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -178,23 +236,22 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 //  instanceNum: the instanceNum of this router
 //  groupID: the id of our group, common to all of our routers
 //  id: (groupID << 16) || instanceNum
-//  
 //  proxyListener: TCP server connection which receives initiations from
 //    browsers
-//  streamCount: count of streams we've made so far, start at 1
-//  outStreams: map from streamID -> outStream, see stream.js. These are
-//    streams which end here. Need this map to look up the connection
-//    with the server when we go off the network
-//  inProxy: HTTP proxy for browser-router communications
-//  outProxy: HTTP proxy for router-server communications
+//
 //  circuitCount: count of circuits we've seen so far
 //  circuitID: the circuit id this starts with
 //  circuitLength: the current length of the circuit starting at this router
-//  
 //  openConns: map from routerIDs to TCPRouterConnections
 //  inCircuitIDToOutCircuitID: a map from non-local circuitIDs to local circuitIDs
 //  outCircuitIDToCircuit: a map from local circuitIDs to circuit objects
-
+//
+//  streamCount: count of streams we've made so far, start at 1
+//  inStreamIDToInStream: map from inStreamID -> inStream
+//  outStreamIDToOutStream: map from outStreamID -> outStream
+//  inProxy: HTTP proxy for browser-router communications
+//  outProxy: HTTP proxy for router-server communications
+//
 //  Port usage shall be as follows:
 //    port     | listener for connections with other Tor61 routers
 //    port + 1 | inProxy
@@ -224,6 +281,7 @@ function Router(port, groupID, instanceNum) {
   // Initialize circuitLookup, a map from local circuit ids to circuit objects
   this.outCircuitIDToCircuit = new Map();
 
+  this.inStreamIDToInStream = new Map();
   // Initialize circuitMap, a map of ingoing to outgoing circuit numbers
   // this.circuitMap = new Map();
   // Initialize circuitIDToRouterID, a map from circuit number to 
@@ -244,8 +302,8 @@ function Router(port, groupID, instanceNum) {
 // A Circuit object contains
 //  inCircuitID: the non-local circuitID
 //    -1 if circuit originates here
-//  outCircuitID: the local circuitID
-//    -1 if -1 if circuit ends here
+//  outCircuitID: the local circuitID NOTE: THIS CAN'T BE -1 BECAUSE THEN OUR
+//    LOOKUPS DON'T WORK
 //  inRouterID: the incoming router on this circuit
 //    -1 if circuit originates here
 //  outRouterID: the outgoing router on this circuit
@@ -261,7 +319,7 @@ function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
 // implements reliable create
 function reliableCreate (router, circuit, outCircuitID, outRouterID,
                         IP, port, tries) {
-  if (circuit.outCircuitID != -1) {
+  if (circuit.outRouterID != -1) {
     // done
     return;
   } else if (tries < MAX_TRIES) {

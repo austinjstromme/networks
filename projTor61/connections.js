@@ -83,10 +83,10 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
       this.logger("CREATED");
       this.router.emit('created', contents, this);
     } else if (contents["cmd"] == 3) {
-      // CREATE FAILED
-      this.logger("CREATE FAILED");
-      var circ = this.router.outCircuitIDToCircuit.get(contents["circuitID"]);
-      this.router.emit('createFailed', circ);
+      console.log("emitting a relay");
+      // RELAY
+      this.logger("RELAY");
+      router.emit('relay', contents, this);
     } else if (contents["cmd"] == 4) {
       // DESTROY
       this.logger("DESTROY");
@@ -113,11 +113,12 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
     } else if (contents["cmd"] == 7) {
       // OPEN FAILED
       this.logger("OPEN FAILED");
-      
     } else if (contents["cmd"] == 8) {
-      // RELAY
-      this.logger("RELAY");
-      router.emit('relay', contents, this);
+      console.log("we've received a create failed!");
+      // CREATE FAILED
+      this.logger("CREATE FAILED");
+      var circ = this.router.outCircuitIDToCircuit.get(contents["circuitID"]);
+      this.router.emit('createFailed', circ);
     }
   }
 

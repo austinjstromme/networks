@@ -6,18 +6,20 @@ var stream = require('../stream');
 
 exports.makeInProxy = function (router, port) {
   var proxy = new net.createServer(function(socket) {
-    // make an inStream object for this one
-    var inStream = stream.makeInStream(router, proxy, socket, router.streamCount++);
+    router.logger("connection on inProxy");
+    // make an inStream object for this one, assign a streamID
+    var streamID = router.streamCount++;
 
-    var clientConn = new connection.clientConnection(proxy, socket, inStream);
-    inStream.clientConn = clientConn;
+    var inStream = stream.makeInStream(router, proxy, streamID);
+    var conn = new connection.clientConnection(proxy, inStream, socket);
+    inStream.clientConn = conn;
   
     socket.on('error', (data) => {
       inStream.logger(data);
     });
 
   });
-  
+
   proxy.listen(port);
   router.logger('inProxy listening on ' + port);
 
@@ -34,6 +36,7 @@ exports.makeInProxy = function (router, port) {
       }
       clientConn.sendBuf = null;
     } else {
+      console.log("connect request from browser succeeded!");
       // no need to send off the header in this case
       // successfully connected, send back ok
       stream.clientConn.socket.write("HTTP/1.0 200 OK\r\n\r\n", 'utf8');
@@ -46,7 +49,7 @@ exports.makeInProxy = function (router, port) {
     router.logger(">>> " + tokens[0] + " " + tokens[1]);
 
     // try and open up
-    var addr = (conn.pHeader["host"] + ":" + conn.pHeader["port"] + "\0");
+    var addr = (clientConn.pHeader["host"] + ":" + clientConn.pHeader["port"] + "\0");
     clientConn.inStream.open(addr, 0);
   });
 
@@ -55,10 +58,10 @@ exports.makeInProxy = function (router, port) {
       return;
     }
   
-    if (clientConn.stream.alive) {
-      console.log("writing to server " + body.length + " bytes");
+    if (clientConn.inStream.alive) {
+      console.log("writing onto tor network " + body.length + " bytes");
       // forward it on with correct encoding
-      clientConn.stream.send(body.toString(clientConn.dataEncoding));
+      clientConn.inStream.send(body.toString('ascii'));
     } else {
       router.logger("proxy trying to send over a non-alive connection");
     }
