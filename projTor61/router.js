@@ -109,20 +109,40 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
 
   router.on('relay', (contents, TCPRouterConn) => {
-    var outgoingCirc = router.circuitMap([contents["circuitID"],
-                                  TCPRouterConn.destRouterID]);
+
+    var outgoingCircID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+    var circ = router.circuitLookup.get(outgoingCirc);
+
     router.logger("got a relay message on circ = " + outgoingCirc);
-    if (router.circuitMap([contents["circuitID"],
-                          TCPRouterConn.destRouterID]) == -1) {
-      // this is the end of the current circuit
+
+    // we are the end of the circuit
+    if (outgoingCirc == -1) {
       router.logger("we've got a message for the end of the circuit!");
+      if (contents['relayCmd'] == 0x06) { //it's an extend message
 
-      // TODO: handle
+        contents['body']; // ip:port\0<agent id>
+        var agentID = contents['body'].split('\0')[1];
+        var tokens = contents['body'].split('\0')[0].split(':');
+        var IP = tokens[0];
+        for (var i = 1; i < tokens.length - 1; i++) {
+          IP += (":" + tokens[i]);
+        }
+        var port = tokens[-1];
 
-    } else {
+        reliableCreate(router, circ, outgoingCircID, agentID, IP, port, 0);
+      }
+
+
+    } else { // hand off the relay
+      
       router.logger("handing off a relay");
+      var outRouterID = circ.outRouterID;
+      var msg = createRelayCell(outgoingCircID, contents['streamID'], contents['relayCmd'], contents['body']);
+      var conn = router.openConns.get(outRouterID);
+      conn.socket.write(msg); // send the relay along
 
     }
+
   });
 
   router.on('circuitEstablished', () => {

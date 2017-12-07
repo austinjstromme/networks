@@ -85,7 +85,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
     } else if (contents["cmd"] == 3) {
       // CREATE FAILED
       this.logger("CREATE FAILED");
-      var circ = this.router.outCircuitIDToCircuit(contents["circuitID"]);
+      var circ = this.router.outCircuitIDToCircuit.get(contents["circuitID"]);
       this.router.emit('createFailed', circ);
     } else if (contents["cmd"] == 4) {
       // DESTROY
@@ -117,6 +117,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
     } else if (contents["cmd"] == 8) {
       // RELAY
       this.logger("RELAY");
+      router.emit('relay', contents, this);
     }
   }
 
