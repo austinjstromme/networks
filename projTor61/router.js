@@ -141,8 +141,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   // issue fetch request, this kicks off the createCircuit function
   router.agent.sendCommand("f Tor61Router-" + groupID + "-");
 
-  // start trying to create a circuit
-  startCircuit(router, 0);
+  // start trying to create a circuit, starting with us
+  var circ = new Circuit(-1, -1, -1, -1);
+  extendCircuit(router, circ, 0);
 
   // now that we've created the router, initiate create circuit
   return router;
@@ -295,22 +296,19 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
   }
 }
 
-// start, reliable across fetchResponses
-function startCircuit(router, tries) {
+function extendCircuit(router, circuit, tries) {
   if (router.availableRouters != null) {
     // for now, we select a router from the list of available routers we've
     // already gotten
     destRouter = router.availableRouters[Math.floor(Math.random()
                                           * router.availableRouters.length)];
-    
-    var circ = new Circuit(-1, -1, -1, -1);
 
-    reliableCreate(router, circ, router.circuitID,
+    reliableCreate(router, circuit, router.circuitID,
                   parseInt(destRouter.get('data')), destRouter.get('IP'),
                   destRouter.get('port'), 0);
   } else if (tries < MAX_TRIES) {
     // see if we've gotten some routers back from reg agent in TIMEOUT
-    setTimeout(startCircuit, TIMEOUT, router, tries + 1);
+    setTimeout(extendCircuit, TIMEOUT, router, circuit, tries + 1);
   } else {
     // no router back from reg agent after MAX_TRIES tries
     router.logger("no fetchResponse to start making circuit with");
