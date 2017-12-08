@@ -12,7 +12,7 @@ var proxy = require('./streamConnections/proxy');
 const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 5; // max tries
 const LOGGING = true;
-const CIRCUIT_LENGTH = 2; // desired circuit length
+const CIRCUIT_LENGTH = 3; // desired circuit length
 
 // returns a fresh router binded to this port
 // this is where all of the logic of the router is 
@@ -69,7 +69,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   // on a create message we update our tables accordingly
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
-    console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
+    //console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
 
     // create a circuit object
     var inCircuitID = contents["circuitID"];
@@ -78,8 +78,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.circuitCount += 2;
     var outRouterID = -1;
     var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
+    circ.inConn = TCPRouterConn;
 
-    console.log(circ);
+    //console.log(circ);
 
     // update maps in router
     router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
@@ -96,11 +97,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // update the circuit
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
-    console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
+    circ.outConn = TCPRouterConn;
+    //console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
 
     var iter = router.openConns.values();
 
-    console.log(circ);
+    //console.log(circ);
 
     // separate responses based on whether its our own circuit
     if (circ.inRouterID == -1) {
@@ -121,22 +123,25 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       router.logger("DO RELAY EXTENDED...");
       // send a relay extended back
       var cell = cells.createRelayCell(circ.inCircuitID, 0x0, 0x07, '');
-      router.openConns.get(circ.inRouterID).socket.write(cell);
+      //router.openConns.get(circ.inRouterID).socket.write(cell);
+      circ.inConn.socket.write(cell);
     }
   });
 
   router.on('send', (data) => {
     // sends data along our circuit
 
-    var outRouterID =
-      router.outCircuitIDToCircuit.get(router.circuitID).outRouterID;
-    var conn = router.openConns.get(outRouterID);
+    //var outRouterID =
+    //  router.outCircuitIDToCircuit.get(router.circuitID).outRouterID;
+    //var conn = router.openConns.get(outRouterID);
+    var circ = router.outCircuitIDToCircuit.get(router.circuitID);
+    var conn = circ.outConn;
 
     conn.socket.write(data);
   });
 
   router.on('relay', (contents, TCPRouterConn) => {
-    TCPRouterConn = router.openConns.get(TCPRouterConn.destRouterID);
+    //TCPRouterConn = router.openConns.get(TCPRouterConn.destRouterID);
     // This trick allows us to look up which way the message is going
     var forwards = true; // true if this message is going forwards along the
       // circuit
@@ -237,7 +242,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         router.emit('extendCircuitFailed');
       }
     } else { // hand off the relay
-      var routerID;
+      /*var routerID;
       var circuitID;
       console.log("direction = " + forwards);
       if (forwards) { // hand it forwards
@@ -249,14 +254,35 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       }
       router.logger("handing off a relay, inCircuitID = " + circuitID);
       var msg = cells.createRelayCell(circuitID, contents['streamID'], contents['relayCmd'], contents['body']);
-      var conn = router.openConns.get(routerID);
-      conn.socket.write(msg); // send the relay along
+      conn.socket.write(msg); // send the relay along*/
+
+      var circuitID;
+      var conn;
+
+      if (forwards) { // hand it forwards
+        circuitID = circ.outCircuitID;
+        conn = circ.outConn;
+      } else { // hand it backwards
+        circuitID = circ.inCircuitID;
+        conn = circ.inConn;
+      }
+      var msg = cells.createRelayCell(circuitID,
+                                     contents['streamID'],
+                                     contents['relayCmd'],
+                                     contents['body']);
+
+      conn.socket.write(msg);
     }
 
   });
 
   router.on('circuitEstablished', () => {
-    router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
+    console.log("circuitEstablished!");
+    if (router.inProxy != null) { // this has already been called
+      return;
+    } else {
+      router.inProxy = proxy.makeInProxy(router, PROXY_PORT);
+    }
   });
 
   // emitted when our extend circuit failed for one reason or another
@@ -365,13 +391,16 @@ function Router(port, groupID, instanceNum) {
 //  outRouterID: the outgoing router on this circuit
 //    -1 if circuit ends here
 //
-//  inConn: TCPRouterConn holding the in socket
-//  outConn: TCPRouterConn holding the out socket
+//  inConn: TCPRouterConn holding the in socket, initialized to null
+//  outConn: TCPRouterConn holding the out socket, initialized to null
 function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
   this.inCircuitID = inCircuitID;
   this.outCircuitID = outCircuitID;
   this.inRouterID = inRouterID;
   this.outRouterID = outRouterID;
+
+  this.inConn = null;
+  this.outConn = null;
 }
 
 
@@ -465,19 +494,16 @@ function makeFirstHop(router, circuit, tries) {
   }
 }
 
-
 function reliableExtend (router, body, oldLength, tries) {
-  
-  if (router.circuitLength == oldLength + 1) {
+  if (router.circuitLength > oldLength) {
     return;
   } else if (tries < MAX_TRIES) {
-
+    router.logger("doing another reliable extend");
     // circuitID, streamID, relayCmd, body
     var relayExtendCell = cells.createRelayCell(router.circuitID, 0x00, 0x06, body);
     router.emit('send', relayExtendCell);
 
-    setTimeout(reliableExtend, TIMEOUT * 3, body, oldLength, tries + 1);
-
+    setTimeout(reliableExtend, TIMEOUT * 3, router, body, oldLength, tries + 1);
   } else { 
     router.emit('extendCircuitFailed');
   }
