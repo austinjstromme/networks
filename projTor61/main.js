@@ -10,4 +10,5 @@ const GROUPID = 1035;
 
 
 r1 = router.makeRouter(PORT, GROUPID, 0001);
-// r2 = router.makeRouter(PORT + 10, GROUPID, 0002);
+// r2 = router.makeRouter(PORT + 10, GROUPID, 0011);
+// r3 = router.makeRouter(PORT + 20, GROUPID, 0111);

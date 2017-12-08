@@ -27,7 +27,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('fetchResponse', (fetchResult) => {
     if (fetchResult.length == 0) {
       router.logger("fetchResult returned with nothing, trying again");
-      router.agent.sendCommand(FETCH_COMMAND);
+      setTimeout(router.agent.sendCommand, 2000, FETCH_COMMAND);
     } else {
       router.logger("fetchResult returned with results");
       // save the available routers
@@ -38,9 +38,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('open', (contents, TCPRouterConn) => {
     router.logger("OPEN");
     if (router.openConns.has(contents["openerID"])) {
-      router.logger("superfluous open (should send back openFailed?)");
+      // router.logger("superfluous open (should send back openFailed?)");
     } else {
-      router.logger("setting openConns");
+      // router.logger("setting openConns");
       router.openConns.set(contents["openerID"], TCPRouterConn);
     }
   });
@@ -49,9 +49,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.logger("OPENED");
     // save the router connection
     if (router.openConns.has(contents["openedID"])) {
-      router.logger("superfluous opened");
+      // router.logger("superfluous opened");
     } else {
-      router.logger("setting openConns");
+      // router.logger("setting openConns");
       router.openConns.set(contents["openedID"], TCPRouterConn);
     }
   });
@@ -59,11 +59,22 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('openFailed', () => {
     router.logger("OPEN FAILED");
     // TODO: implement. When does this happen, and what should we do?
+    // Nothing, there is nothign we can do here. break everything?
   });
 
-  router.on('createFailed', () => {
-    router.logger("CREATE FAILED");
+  router.on('createFailed', (circ) => {
+    router.logger("CREATE FAILED, TRYING AGAIN... ");
+
+    // issue a new fetch to potentially get more routers to choose from
     router.agent.sendCommand(FETCH_COMMAND);
+
+    // Here we want to to pick a new router and try again
+    destRouter = router.availableRouters[Math.floor(Math.random()
+                                          * router.availableRouters.length)];
+
+    reliableCreate(router, circ, router.circuitID,
+                  parseInt(destRouter.get('data')), destRouter.get('IP'),
+                  destRouter.get('port'), 0);
   });
 
   // on a create message we update our tables accordingly
@@ -80,12 +91,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
     circ.inConn = TCPRouterConn;
 
-    //console.log(circ);
-
     // update maps in router
-    router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
+    // router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
     router.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
-    router.logger("setting outCircuitIDToCircuit | " + outCircuitID + ":" + circ);
+    // router.logger("setting outCircuitIDToCircuit | " + outCircuitID + ":" + circ);
     router.outCircuitIDToCircuit.set(outCircuitID, circ);
   });
 
@@ -98,11 +107,8 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
     circ.outConn = TCPRouterConn;
-    //console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
 
     var iter = router.openConns.values();
-
-    //console.log(circ);
 
     // separate responses based on whether its our own circuit
     if (circ.inRouterID == -1) {
@@ -302,7 +308,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   // emitted when our extend circuit failed for one reason or another
   router.on('extendCircuitFailed', () => {
     // TODO: implement
-    router.logger('EXTEND CIRCUIT FAILED');
+    router.logger('EXTEND CIRCUIT FAILED, trying again');
+
+
   });
 
   // Failed to create a TCP connection, remove the bad router from availible routers and try again
@@ -518,7 +526,7 @@ function reliableExtend (router, body, oldLength, tries) {
   if (router.circuitLength > oldLength) {
     return;
   } else if (tries < MAX_TRIES) {
-    router.logger("doing another reliable extend");
+    // router.logger("doing another reliable extend");
     // circuitID, streamID, relayCmd, body
     var relayExtendCell = cells.createRelayCell(router.circuitID, 0x00, 0x06, body);
     router.emit('send', relayExtendCell);

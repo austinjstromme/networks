@@ -12,7 +12,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   // This object needs to handle the OPEN-OPENED handshake
   // both when we initiate and when the other router does
   this.id = IDcount++;
-  console.log("making TCPRouterConnection " + this.id);
+  // console.log("making TCPRouterConnection " + this.id);
   IDcount++;
   this.router = router;
   this.socket = socket;
