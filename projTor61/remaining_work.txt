@@ -1,0 +1,5 @@
+1) make a test case with several copies of our router
+
+2) make relay with various message types work (including failure messages etc.)
+
+3) implement outStream and outProxy
