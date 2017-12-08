@@ -125,22 +125,30 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // This trick allows us to look up which way the message is going
     var forwards = true; // true if this message is going forwards along the
       // circuit
-    if ((((contents["circuitID"] % 2) == 0) && TCPRouterConn.forward)
-        || (((contents["circuitID"] % 2) == 1) && !TCPRouterConn.forward)) {
+    
+    // if the circuitID is even and it is moving in the direction of the
+    // TCP connection or if the virvuitID is odd and it is moving in the
+    // opposite direction, it is moving forward.
+    if ((((contents["circuitID"] % 2) == 0) && !TCPRouterConn.forward)
+        || (((contents["circuitID"] % 2) == 1) && TCPRouterConn.forward)) {
         forwards = false;
+        router.logger("backward direction on relay");
     }
 
+    // get the correct circuit to send messages along
     var circ;
-
     if (forwards) {
       var outCircuitID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
       circ = router.outCircuitIDToCircuit.get(outCircuitID);
     } else {
-      circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
+      router.logger("aaaaaaaaaaaaaaaaaaaaa");
+      circ = router.outCircuitIDToCircuit.get(contents["circuitID"]); // is this ok?
     }
 
-    console.log("relay message on circuit = ");
-    console.log(circ);
+    // var circ = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+
+    //console.log("relay message on circuit = ");
+    //console.log(circ);
 
     if (circ.outRouterID == -1) { // we are the end of the circuit
       router.logger("we've got a message for the end of the circuit!");
@@ -368,8 +376,8 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
                                            outCircuitID);
       router.outCircuitIDToCircuit.set(outCircuitID, circuit);
       circuit.outCircuitID = outCircuitID;
-      console.log("sending create with");
-      console.log(circuit);
+      // console.log("sending create with");
+      // console.log(circuit);
 
       // try to create the next hop
       conn.sendCreate(outCircuitID);
