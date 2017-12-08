@@ -37,13 +37,23 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   router.on('open', (contents, TCPRouterConn) => {
     router.logger("OPEN");
-    router.openConns.set(contents["openerID"], TCPRouterConn);
+    if (router.openConns.has(contents["openerID"])) {
+      router.logger("superfluous open (should send back openFailed?)");
+    } else {
+      router.logger("setting openConns");
+      router.openConns.set(contents["openerID"], TCPRouterConn);
+    }
   });
 
   router.on('opened', (contents, TCPRouterConn) => {
     router.logger("OPENED");
     // save the router connection
-    router.openConns.set(contents["openedID"], TCPRouterConn);
+    if (router.openConns.has(contents["openedID"])) {
+      router.logger("superfluous opened");
+    } else {
+      router.logger("setting openConns");
+      router.openConns.set(contents["openedID"], TCPRouterConn);
+    }
   });
 
   router.on('openFailed', () => {
@@ -59,6 +69,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   // on a create message we update our tables accordingly
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
+    console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
 
     // create a circuit object
     var inCircuitID = contents["circuitID"];
@@ -67,6 +78,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.circuitCount += 2;
     var outRouterID = -1;
     var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
+
     console.log(circ);
 
     // update maps in router
@@ -85,6 +97,8 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
     console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
+
+    var iter = router.openConns.values();
 
     console.log(circ);
 
@@ -122,12 +136,13 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   });
 
   router.on('relay', (contents, TCPRouterConn) => {
+    TCPRouterConn = router.openConns.get(TCPRouterConn.destRouterID);
     // This trick allows us to look up which way the message is going
     var forwards = true; // true if this message is going forwards along the
       // circuit
     
     // if the circuitID is even and it is moving in the direction of the
-    // TCP connection or if the virvuitID is odd and it is moving in the
+    // TCP connection or if the circuitID is odd and it is moving in the
     // opposite direction, it is moving forward.
     if ((((contents["circuitID"] % 2) == 0) && !TCPRouterConn.forward)
         || (((contents["circuitID"] % 2) == 1) && TCPRouterConn.forward)) {
@@ -141,8 +156,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       var outCircuitID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
       circ = router.outCircuitIDToCircuit.get(outCircuitID);
     } else {
-      router.logger("aaaaaaaaaaaaaaaaaaaaa");
-      circ = router.outCircuitIDToCircuit.get(contents["circuitID"]); // is this ok?
+      circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
     }
 
     // var circ = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
@@ -350,6 +364,9 @@ function Router(port, groupID, instanceNum) {
 //    -1 if circuit originates here
 //  outRouterID: the outgoing router on this circuit
 //    -1 if circuit ends here
+//
+//  inConn: TCPRouterConn holding the in socket
+//  outConn: TCPRouterConn holding the out socket
 function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
   this.inCircuitID = inCircuitID;
   this.outCircuitID = outCircuitID;
@@ -385,6 +402,10 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
       var socket = new net.createConnection(port, IP);
 
       socket.on('connect', () => {
+        // in the mean time it was opened
+        if (router.openConns.has(outRouterID)) {
+          return;
+        }
         router.logger("connected to " + outRouterID);
         var conn = new connections.TCPRouterConnection(router, socket,
           outRouterID);

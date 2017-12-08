@@ -4,12 +4,16 @@ var cells = require('./cells');
 const TIMEOUT = 3000; // timeout in ms
 const MAX_TRIES = 3; // max tries
 const LOGGING = false;
+var IDcount = 0;
 
 // An object containing a TCP connection between two routers. Handles incoming
 //	  and outgoing cells on this connection.
 exports.TCPRouterConnection = function (router, socket, destRouterID) {
   // This object needs to handle the OPEN-OPENED handshake
   // both when we initiate and when the other router does
+  this.id = IDcount++;
+  console.log("making TCPRouterConnection " + this.id);
+  IDcount++;
   this.router = router;
   this.socket = socket;
   this.destRouterID = destRouterID;
@@ -132,9 +136,9 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
 //    other routers. 
 exports.routerListener = function (router, port) {
   var listener = new net.createServer((socket) => {
-    //router.logger("received connection from another router!");
+    router.logger("received connection from another router!");
     var conn = new exports.TCPRouterConnection(router, socket, null);
-    conn.forward = false; //this connection is backward in the network
+    conn.forward = false; // this connection is backward in the network
   });
 
   listener.listen(port);
