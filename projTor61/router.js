@@ -63,18 +63,20 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   });
 
   router.on('createFailed', (circ) => {
-    router.logger("CREATE FAILED, TRYING AGAIN... ");
+    router.logger("CREATE FAILED");
 
-    // issue a new fetch to potentially get more routers to choose from
+    // first, reset the availableRouters in case there is a bad one
+    router.availableRouters = null;
     router.agent.sendCommand(FETCH_COMMAND);
 
-    // Here we want to to pick a new router and try again
-    destRouter = router.availableRouters[Math.floor(Math.random()
-                                          * router.availableRouters.length)];
-
-    reliableCreate(router, circ, router.circuitID,
-                  parseInt(destRouter.get('data')), destRouter.get('IP'),
-                  destRouter.get('port'), 0);
+    if (circ.inRouterID == -1) {
+      // this means it's the beginning of the circuit, try create again
+      makeFirstHop(router, circ, 0);
+    } else {
+      // otherwise just send back a relay extend failed message
+      var msg = cells.createRelayCell(circ.inCircuitID, 0x0, 0x0c, '');
+      circ.inConn.socket.write(msg);
+    }
   });
 
   // on a create message we update our tables accordingly
@@ -169,11 +171,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     } else {
       circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
     }
-
-    // var circ = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
-
-    //console.log("relay message on circuit = ");
-    //console.log(circ);
 
     if (circ.outRouterID == -1) { // we are the end of the circuit
       router.logger("we've got a message for the end of the circuit!");
@@ -310,14 +307,11 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // TODO: implement
     router.logger('EXTEND CIRCUIT FAILED, trying again');
 
+    // issue a new fetch to potentially get more routers to choose from
+    router.agent.sendCommand(FETCH_COMMAND);
 
-  });
 
-  // Failed to create a TCP connection, remove the bad router from availible routers and try again
-  router.on('createFailed', (TCPRouterConnection) => {
-    router.logger("failed to create a TCP connection with " + TCPRouterConnection.destRouterID);
-    // probably want to kick off the create again with another fetch?
-    // router.agent.sendCommand("f Tor61Router-" + groupID + "-" + instanceNum);
+
   });
 
   // issue fetch request, this kicks off the createCircuit function
