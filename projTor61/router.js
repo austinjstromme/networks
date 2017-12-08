@@ -174,10 +174,24 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       if (contents['relayCmd'] == 0x01) {  // begin
         // TODO: do what we need to here to save some sort of outStream
         // send back that we've connected
-        TCPRouterConn.socket.write(cells.createRelayCell(contents["circuitID"],
-                                                  contents["streamID"],
-                                                  0x04,
-                                                  ""));
+        if (circ.streamIDToOutStream == null) {
+          circ.streamIDToOutStream = new Map();
+        }
+
+        // pass in the correct params here
+        var outStream = stream.makeOutStream(router,
+                                      router.outProxy,
+                                      contents["streamID"],
+                                      circ,
+                                      contents["body"]);
+
+        circ.streamIDToOutStream.set(contents["streamID"], outStream);
+
+        // should only do this when we get a connected event
+        //TCPRouterConn.socket.write(cells.createRelayCell(contents["circuitID"],
+        //                                          contents["streamID"],
+        //                                          0x04,
+        //                                          ""));
       } else if (contents['relayCmd'] == 0x02) { // stream data
         router.logger("received body with length = " + contents['body'].length);
       } else if (contents['relayCmd'] == 0x03) { // end request
@@ -393,6 +407,9 @@ function Router(port, groupID, instanceNum) {
 //
 //  inConn: TCPRouterConn holding the in socket, initialized to null
 //  outConn: TCPRouterConn holding the out socket, initialized to null
+//
+//  streamIDToOutStream: map from streamID to outStreams
+//  streamIDToInStream: map from streamID to inStreams
 function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
   this.inCircuitID = inCircuitID;
   this.outCircuitID = outCircuitID;
@@ -401,6 +418,9 @@ function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
 
   this.inConn = null;
   this.outConn = null;
+
+  this.streamIDToOutStream = null;
+  this.streamIDToInStream = null;
 }
 
 

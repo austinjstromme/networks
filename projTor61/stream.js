@@ -97,8 +97,8 @@ function inStream(router, proxy, streamID) {
 }
 
 
-exports.makeOutStream = function (router, proxy, streamID) {
-  var stream = new outStream(router, proxy, streamID);
+exports.makeOutStream = function (router, outProxy, streamID, circ, addr) {
+  var stream = new outStream(router, proxy, streamID, circ, addr);
 
   stream.on('connected', () => {
     stream.logger("we're up and alive!");
@@ -110,7 +110,7 @@ exports.makeOutStream = function (router, proxy, streamID) {
   stream.on('connectFailed', () => {
     stream.logger("connect to server failed!");
 
-    stream.router.emit('beginFailed', stream);
+    stream.router.emit('connectFailed', stream);
   });
 
   stream.on('response', (data) => {
@@ -121,13 +121,14 @@ exports.makeOutStream = function (router, proxy, streamID) {
 }
 
 // object encapsulating the router-server interface
-exports.outStream = function (router, proxy, streamID) {
+exports.outStream = function (router, proxy, streamID, circ, addr) {
   // A stream object will contain
   //  router: reference to the router
   //  proxy: reference to InProxy
+  //  streamID
+  //  circ: circuit this is on
   //  clientConn: reference to clientConnection
   //    (see streamConnections/connection.js)
-  //  streamID: this stream's input
   //  alive: true if this is a good stream, false otherwise
 
   this.router = router;
