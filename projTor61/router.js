@@ -84,6 +84,8 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // update the circuit
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
+    console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
+
     console.log(circ);
 
     // separate responses based on whether its our own circuit
@@ -465,9 +467,9 @@ function extendOurCircuit (router) {
 //   even if TCPConn is forward, odd otherwise.
 function makeCircuitID (circuitID, TCPRouterConn) {
   if (TCPRouterConn.forward) {
-    circuitID += (circuitID % 2); // make the circuitID even
-  } else {
     circuitID += ((circuitID + 1) % 2); // make the circuitID odd
+  } else {
+    circuitID += (circuitID % 2); // make the circuitID even
   }
   return circuitID;
 }
