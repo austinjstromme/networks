@@ -80,11 +80,11 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     router.logger("CREATED");
     // look up the circuit
     var circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
-    console.log(circ);
 
     // update the circuit
     circ.outCircuitID = contents["circuitID"];
     circ.outRouterID = TCPRouterConn.destRouterID;
+    console.log(circ);
 
     // separate responses based on whether its our own circuit
     if (circ.inRouterID == -1) {
@@ -136,6 +136,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     } else {
       circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
     }
+
+    console.log("relay message on circuit = ");
+    console.log(circ);
 
     if (circ.outRouterID == -1) { // we are the end of the circuit
       router.logger("we've got a message for the end of the circuit!");
@@ -210,11 +213,19 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         router.emit('extendCircuitFailed');
       }
     } else { // hand off the relay
-      console.log(circ.inRouterID);
-      router.logger("handing off a relay");
-      var outRouterID = circ.outRouterID;
-      var msg = cells.createRelayCell(outCircuitID, contents['streamID'], contents['relayCmd'], contents['body']);
-      var conn = router.openConns.get(outRouterID);
+      var routerID;
+      var circuitID;
+      console.log("direction = " + forwards);
+      if (forwards) { // hand it forwards
+        routerID = circ.outRouterID;
+        circuitID = circ.outCircuitID;
+      } else { // hand it backwards
+        routerID = circ.inRouterID;
+        circuitID = circ.inCircuitID;
+      }
+      router.logger("handing off a relay, inCircuitID = " + circuitID);
+      var msg = cells.createRelayCell(circuitID, contents['streamID'], contents['relayCmd'], contents['body']);
+      var conn = router.openConns.get(routerID);
       conn.socket.write(msg); // send the relay along
     }
 
@@ -348,10 +359,15 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
     if (router.openConns.has(outRouterID)) {
       var conn = router.openConns.get(outRouterID);
 
-      // make sure things are pointing correctly
+      // make sure things are pointing correctly - possibly
+      // delete the old circuitID from the map
       outCircuitID = makeCircuitID(outCircuitID, conn);
-
+      router.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
+                                           outCircuitID);
       router.outCircuitIDToCircuit.set(outCircuitID, circuit);
+      circuit.outCircuitID = outCircuitID;
+      console.log("sending create with");
+      console.log(circuit);
 
       // try to create the next hop
       conn.sendCreate(outCircuitID);
@@ -365,8 +381,10 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
 
         // make sure things are pointing correctly
         outCircuitID = makeCircuitID(outCircuitID, conn);
-
+        router.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
+                                             outCircuitID);
         router.outCircuitIDToCircuit.set(outCircuitID, circuit);
+        circuit.outCircuitID = outCircuitID;
 
         // try to create the next hop
         conn.sendCreate(outCircuitID, 0); // wont work
