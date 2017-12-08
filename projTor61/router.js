@@ -65,11 +65,11 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   router.on('createFailed', (circ) => {
     router.logger("CREATE FAILED");
 
-    // first, reset the availableRouters in case there is a bad one
-    router.availableRouters = null;
-    router.agent.sendCommand(FETCH_COMMAND);
-
     if (circ.inRouterID == -1) {
+      // first, reset the availableRouters in case there is a bad one
+      router.availableRouters = null;
+      router.agent.sendCommand(FETCH_COMMAND);
+
       // this means it's the beginning of the circuit, try create again
       makeFirstHop(router, circ, 0);
     } else {
@@ -121,7 +121,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       if (router.circuitLength < CIRCUIT_LENGTH) {
         router.logger("EXTENDING...");
         // do some sort of extension
-        extendOurCircuit(router);
+        extendOurCircuit(router, 0);
 
       } else {
         router.emit('circuitEstablished');
@@ -245,7 +245,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         if (router.circuitLength < CIRCUIT_LENGTH) {
           router.logger("EXTENDING...");
           // do some sort of extension
-          extendOurCircuit(router);
+          extendOurCircuit(router, 0);
         } else {
           router.emit('circuitEstablished');
         }
@@ -304,14 +304,13 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   // emitted when our extend circuit failed for one reason or another
   router.on('extendCircuitFailed', () => {
-    // TODO: implement
     router.logger('EXTEND CIRCUIT FAILED, trying again');
 
     // issue a new fetch to potentially get more routers to choose from
+    router.availableRouters = null;
     router.agent.sendCommand(FETCH_COMMAND);
 
-
-
+    extendOurCircuit(router, 0);
   });
 
   // issue fetch request, this kicks off the createCircuit function
@@ -474,7 +473,6 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
 
       socket.on('timeout', () => {
         router.logger("open to " + outRouterID + " failed... malformed IP/port?");
-        // TODO: createFailed will take more arguments
         router.emit('createFailed', circuit);
       });
     }
@@ -531,13 +529,20 @@ function reliableExtend (router, body, oldLength, tries) {
   }
 }
 
-function extendOurCircuit (router) {
-  destRouter = router.availableRouters[Math.floor(Math.random()
-                                          * router.availableRouters.length)];
-
-  var body = destRouter.get('IP') + ":" + destRouter.get('port') + '\0' + destRouter.get('data');
-
-  reliableExtend(router, body, router.circuitLength, 0);
+function extendOurCircuit (router, tries) {
+  if (router.availableRouters != null) {
+    destRouter = router.availableRouters[Math.floor(Math.random()
+                                            * router.availableRouters.length)];
+  
+    var body = destRouter.get('IP') + ":" + destRouter.get('port') + '\0' + destRouter.get('data');
+  
+    reliableExtend(router, body, router.circuitLength, 0);
+  } else if (tries < MAX_TRIES) {
+    setTimeout(extendOurCircuit, TIMEOUT, router, tries + 1);
+  } else {
+    // no available routers
+    router.emit('extendCircuitFailed');
+  }
 }
 
 // generate a circuitID to be used on this TCPConn.
