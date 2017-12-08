@@ -134,7 +134,7 @@ exports.serverConnection = function (proxy, socket, clientConn) {
   this.headerBuf = null;
   this.pHeader = null;
   this.clientConn = clientConn;
-  this.dataEncoding = 'binary';
+  this.dataEncoding = 'ascii';
 
   events.EventEmitter.call(this);
 

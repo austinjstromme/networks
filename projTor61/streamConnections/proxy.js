@@ -26,6 +26,7 @@ exports.makeInProxy = function (router, port) {
   // when the stream has been successfully opened it emits an open event
   proxy.on('opened', (stream) => {
     var clientConn = stream.clientConn;
+    var serverConn = new connection.serverConnection(proxy, socket, clientConn);
     if (clientConn.pHeader["type"] != "CONNECT") {
       // send off the header
       stream.send(clientConn.pHeader["fullHeader"]);
@@ -46,7 +47,7 @@ exports.makeInProxy = function (router, port) {
 
   proxy.on('clientHeader', (clientConn) => {
     tokens = clientConn.pHeader["fullHeader"].split(/\s+/);
-    router.logger(">>> " + tokens[0] + " " + tokens[1]);
+    clientConn.inStream.logger(">>> " + tokens[0] + " " + tokens[1]);
 
     // try and open up
     var addr = (clientConn.pHeader["host"] + ":" + clientConn.pHeader["port"] + "\0");
@@ -59,7 +60,6 @@ exports.makeInProxy = function (router, port) {
     }
   
     if (clientConn.inStream.alive) {
-      body = body.toString('ascii');
       console.log("writing onto tor network " + body.length + " bytes");
       // forward it on with correct encoding
       clientConn.inStream.send(body.toString('ascii'));
@@ -73,14 +73,14 @@ exports.makeInProxy = function (router, port) {
       stream.clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
   });
   
-  /*proxy.on('serverHeader', (serverConn) => {
+  proxy.on('serverHeader', (serverConn) => {
     // received a header from the server; forward it along to the client
     if (!serverConn.clientConn.socket.destroyed) {
       console.log(">>> " + serverConn.pHeader["fullHeader"].split(/\r\n+/)[0]);
       //console.log("writing in response = " + serverConn.pHeader["fullHeader"]);
       serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"], 'utf8');
     }
-  });*/
+  });
 
   proxy.on('serverBody', (stream, body) => {
     // received some body from the server; forward it along to the client
@@ -95,9 +95,7 @@ exports.makeInProxy = function (router, port) {
   return proxy;
 }
 
-exports.makeOutProxy = function (router, port) {
-  console.log("port = " + port);
-
+/*exports.makeOutProxy = function (router, port) {
   var proxy = new net.createServer(function(socket) {
     var clientConn = new connection.clientConnection(proxy, socket);
   
@@ -109,85 +107,55 @@ exports.makeOutProxy = function (router, port) {
   proxy.listen(port);
   router.logger('outProxy listening on ' + port);
   
-  proxy.on('clientHeader', (clientConn) => {
-    tokens = clientConn.pHeader["fullHeader"].split(/\s+/);
-    console.log(">>> " + tokens[0] + " " + tokens[1]);
+  proxy.on('connect', (outStream) => {
+    console.log("outProxy attempting to connect to: " + outStream.addr);
+    var tokens = outStream.addr.split('\0')[0].split(':');
+    var IP = tokens[0];
+
+    for (var i = 1; i < tokens.length - 1; i++) {
+      IP += (":" + tokens[i]);
+    }
+    var port = tokens[tokens.length - 1];
   
-    var serverSocket = net.createConnection(clientConn.pHeader["port"],
-      clientConn.pHeader["host"]);
+    var serverSocket = net.createConnection(port, IP);
   
     // handle problems with connecting:
     serverSocket.on('error', (data) => {
-      console.log("clientConn.header = " + clientConn.pHeader["fullHeader"] + " had error in server socket");
-      console.log(data);
-      if (!clientConn.socket.destroyed) {
-        clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
-      }
+      outStream.emit('connectFailed');
     });
   
-    var serverConn = new connection.serverConnection(proxy, serverSocket, clientConn);
-  
-    clientConn.serverConn = serverConn;
+    outStream.serverSocket = serverSocket; 
   
     serverSocket.on('connect', () => {
-      if (clientConn.pHeader["type"] == "CONNECT") {
-        clientConn.socket.write("HTTP/1.0 200 OK\r\n\r\n", 'utf8');
-        // clear off sendBuf
-        clientConn.sendBuf = null;
-      }
+      outStream.emit('connected');
     });
   
     serverSocket.on('timeout', () => {
-      console.log("timed out");
-      if (clientConn.pHeader["type"] == "CONNECT") {
-        clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
-      }
-      clientConn.socket.close();
-      serverConn.socket.close();
+      outStream.emit('connectFailed');
     });
   
-    // if it's non-connect, send on the header and any body that's arrived
-    if (clientConn.pHeader["type"] != "CONNECT") {
-      //console.log("just wrote to server " + clientConn.pHeader["fullHeader"]);
-      serverSocket.write(clientConn.pHeader["fullHeader"], 'utf8');
-      if (clientConn.sendBuf != null) {
-        // write anything remaining
-        serverSocket.write(clientConn.sendBuf, clientConn.dataEncoding);
-      }
-      clientConn.sendBuf = null;
-    }
   });
   
-  proxy.on('clientBody', (clientConn, body) => {
-    if (body.length == 0) {
+  proxy.on('clientBody', (stream, data) => {
+    if (data.length == 0) {
       return;
     }
   
-    if (!clientConn.serverConn.socket.destroyed) {
-      //console.log("writing to server " + body.length + " bytes");
+    if (!stream.serverSocket.destroyed) {
+      stream.logger("writing to server " + data.length + " bytes");
       // forward it on with correct encoding
-      clientConn.serverConn.socket.write(body, clientConn.dataEncoding);
+      stream.serverSocket.write(data, 'ascii');
     }
   });
   
-  proxy.on('serverHeader', (serverConn) => {
-    // received a header from the server; forward it along to the client
-    if (!serverConn.clientConn.socket.destroyed) {
-      console.log(">>> " + serverConn.pHeader["fullHeader"].split(/\r\n+/)[0]);
-      //console.log("writing in response = " + serverConn.pHeader["fullHeader"]);
-      serverConn.clientConn.socket.write(serverConn.pHeader["fullHeader"], 'utf8');
-    }
-  });
   
-  proxy.on('serverBody', (serverConn, body) => {
-    // received some body from the server; forward it along to the client
-    if (!serverConn.clientConn.socket.destroyed) {
-      //console.log("wriiting to client " + body.length + " bytes");
-      serverConn.clientConn.socket.write(body, serverConn.dataEncoding);
+  proxy.on('serverBody', (outStream, body) => {
+    if (outStream.alive) {
+      outStream.emit('inData', body.toString('ascii'));
     } else {
-      console.log("client was closed, no body sent");
+      outStream.logger("stream was closed, no body sent");
     }
   });
 
   return proxy;
-}
+}*/

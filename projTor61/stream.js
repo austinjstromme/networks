@@ -14,6 +14,8 @@ exports.makeInStream = function (router, proxy, streamID) {
   // save it in the routing tables
   router.inStreamIDToInStream.set(streamID, stream);
 
+  // emitted when the router receives a connected from its own circuit with
+  // this streamID
   stream.on('opened', () => {
     stream.logger("we're up and alive!");
     stream.alive = true;
@@ -30,7 +32,10 @@ exports.makeInStream = function (router, proxy, streamID) {
   stream.on('response', (data) => {
     stream.logger("received response from the server on inStream");
 
-    stream.proxy.emit('serverBody', stream, data);
+    // convert to a buffer, then pass to serverConn as if it's real
+    // (this is a hack to reuse the processing code in serverConn)
+    data = Buffer.from(data, 'ascii');
+    stream.serverConn.socket.emit('data', data);
   });
 
   return stream;
@@ -43,6 +48,7 @@ function inStream(router, proxy, streamID) {
   //  proxy: reference to InProxy
   //  clientConn: reference to clientConnection
   //    (see streamConnections/connection.js)
+  //  serverConn: just used for buffering and augmenting headers
   //  streamID: this stream's input
   //  alive: true if this is a good stream, false otherwise
 
@@ -50,10 +56,11 @@ function inStream(router, proxy, streamID) {
   this.proxy = proxy;
   this.streamID = streamID;
   this.clientConn = null;
+  this.serverConn = null;
   this.alive = false;
 
   this.logger = function (data) {
-    console.log("Tor61Router-" + router.id + "-Stream-" + this.streamID
+    console.log("Tor61Router-" + router.id + "-inStream-" + this.streamID
       + ": " + data);
   }
 
@@ -83,8 +90,8 @@ function inStream(router, proxy, streamID) {
   this.send = function (data) {
     if (this.alive) {
       // TODO: this should be a bit less than 512 to account for the header
-      for (var i = 0; i < (data.length/512); i++) {
-        var chunk = data.substr(i*512, (i + 1)*512);
+      for (var i = 0; i < (data.length/498); i++) {
+        var chunk = data.substr(i*498, (i + 1)*498);
         var cell = cells.createRelayCell(router.circuitID, this.streamID,
           2, chunk);
         
@@ -97,29 +104,6 @@ function inStream(router, proxy, streamID) {
 }
 
 
-exports.makeOutStream = function (router, outProxy, streamID, circ, addr) {
-  var stream = new outStream(router, proxy, streamID, circ, addr);
-
-  stream.on('connected', () => {
-    stream.logger("we're up and alive!");
-    stream.alive = true;
-
-    stream.router.emit('connected', stream);
-  });
-
-  stream.on('connectFailed', () => {
-    stream.logger("connect to server failed!");
-
-    stream.router.emit('connectFailed', stream);
-  });
-
-  stream.on('response', (data) => {
-    stream.logger("received response from the server on outStream");
-
-    stream.router.emit('serverBody', stream, data);
-  });
-}
-
 // object encapsulating the router-server interface
 exports.outStream = function (router, proxy, streamID, circ, addr) {
   // A stream object will contain
@@ -127,57 +111,65 @@ exports.outStream = function (router, proxy, streamID, circ, addr) {
   //  proxy: reference to InProxy
   //  streamID
   //  circ: circuit this is on
-  //  clientConn: reference to clientConnection
-  //    (see streamConnections/connection.js)
+  //  serverSocket: socket to the server
   //  alive: true if this is a good stream, false otherwise
 
   this.router = router;
   this.proxy = proxy;
   this.streamID = streamID;
-  this.clientConn = null;
+  this.circ = circ;
   this.alive = false;
 
-  this.logger = function (data) {
-    console.log("stream " + streamID + " at Tor61 router " + router.id
-      + ": "+ data);
-  }
+  var tokens = addr.split('\0')[0].split(':');
+  var IP = tokens[0];
 
-  this.open = function (addr, tries) {
-    if (this.alive) {
-      // we're open! so done
-      return;
-    } else {
-      if (this.tries < MAX_TRIES) {
-        this.logger("trying to open to " + addr);
-        // send off a open stream cell
-        this.router.send(cells.createRelayCell(router.circuitID,
-                                               this.streamID,
-                                               1,
-                                               addr));
-        // check back in TIMEOUT
-        setTimeout(this.open, TIMEOUT, addr, tries + 1);
-      } else {
-        this.logger("ran out of tires trying to open");
-        return;
-      }
-    }
+  for (var i = 1; i < tokens.length - 1; i++) {
+      IP += (":" + tokens[i]);
   }
+  var port = tokens[tokens.length - 1];
+
+  this.logger("opening a socket to " + IP + ":" + port);
+  this.serverSocket = net.createConnection(port, IP);
 
   // non-reliable send for this stream; requires this.alive
   this.send = function (data) {
     if (this.alive) {
-      this.logger("sending data");
-      for (var i = 0; i < (data.length/512 + 1); i++) {
-        // chunk up the message and send it off
-        this.router.emit('send', cells.CreateRelayCell(router.circuitID,
-                                                       this.streamID,
-                                                       2,
-                                                       data.substr(i*512, (i + 1)*512)));
+      for (var i = 0; i < (data.length/498); i++) {
+        var chunk = data.substr(i*498, (i + 1)*498);
+        var cell = cells.createRelayCell(router.circuitID, this.streamID,
+          2, chunk);
+        
+        this.router.emit('send', cell);
       }
     } else {
       this.logger("mayday mayday stream isn't alive but is being sent over!");
     }
   }
+
+  this.logger = function (data) {
+    console.log("Tor61Router-" + router.id + "-outStream-" + this.streamID
+      + ": " + data);
+  }
+
+  serverSocket.on('connect', () => {
+    this.logger("we're up and alive!");
+    this.alive = true;
+
+    // we're up - tell the router so
+    this.router.emit('connected', this);
+  });
+
+  serverSocket.on('timeout', () => {
+    this.emit('connectFailed');
+  });
+
+  serverSocket.on('error', (data) => {
+    this.emit('connectFailed');
+  });
+
+  serverSocket.on('data', (buf) => {
+    this.send(buf.toString('ascii'));
+  });
 }
 
 util.inherits(inStream, events.EventEmitter);
