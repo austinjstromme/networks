@@ -22,7 +22,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   // first create a router object
   var router = new Router(port, groupID, instanceNum);
-  router.outProxy = proxy.makeOutProxy(router, port + 2);
 
   router.on('fetchResponse', (fetchResult) => {
     if (fetchResult.length == 0) {
@@ -136,6 +135,26 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     }
   });
 
+  router.on('connected', (outStream) => {
+    // sending back a connected
+    var circ = outStream.circ;
+    var TCPRouterConn = circ.inConn;
+    TCPRouterConn.socket.write(cells.createRelayCell(circ.inCircuitID,
+                                                     outStream.streamID,
+                                                     0x04,
+                                                     ""));
+  });
+
+  router.on('connectFailed', (outStream) => {
+    router.logger("begin failed");
+    var circ = outStream.circ;
+    var TCPRouterConn = circ.inConn;
+    TCPRouterConn.socket.write(cells.createRelayCell(circ.inCircuitID,
+                                                     outStream.streamID,
+                                                     0x0b,
+                                                     ""));
+  });
+
   router.on('send', (data) => {
     // sends data along our circuit
 
@@ -182,21 +201,17 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         }
 
         // pass in the correct params here
-        var outStream = stream.makeOutStream(router,
-                                      router.outProxy,
-                                      contents["streamID"],
-                                      circ,
-                                      contents["body"]);
+        var outStream = new stream.outStream(router,
+                                             contents["streamID"],
+                                             circ,
+                                             contents["body"]);
 
         circ.streamIDToOutStream.set(contents["streamID"], outStream);
+      } else if (contents['relayCmd'] == 0x02) { // stream data, hand it off
+        var outStream = circ.streamIDToOutStream.get(contents["streamID"]);
+        outStream.serverSocket.write(contents['body'].toString('ascii'));
 
-        // should only do this when we get a connected event
-        //TCPRouterConn.socket.write(cells.createRelayCell(contents["circuitID"],
-        //                                          contents["streamID"],
-        //                                          0x04,
-        //                                          ""));
-      } else if (contents['relayCmd'] == 0x02) { // stream data
-        router.logger("received body with length = " + contents['body'].length);
+        router.logger("got " + contents["body"].length + " bytes from the start of the circuit at the end");
       } else if (contents['relayCmd'] == 0x03) { // end request
         // TODO: implement
       } else if (contents['relayCmd'] == 0x04) { // connected
@@ -367,7 +382,6 @@ function Router(port, groupID, instanceNum) {
   this.id = (this.groupID << 16) || this.instanceNum;
   this.streamCount = 1; // Streams start at 1 (0 is reserved)
   this.inProxy = null;
-  this.outProxy = null;
 
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();

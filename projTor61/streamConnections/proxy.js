@@ -26,7 +26,10 @@ exports.makeInProxy = function (router, port) {
   // when the stream has been successfully opened it emits an open event
   proxy.on('opened', (stream) => {
     var clientConn = stream.clientConn;
+
+    var socket = new net.Socket();
     var serverConn = new connection.serverConnection(proxy, socket, clientConn);
+
     if (clientConn.pHeader["type"] != "CONNECT") {
       // send off the header
       stream.send(clientConn.pHeader["fullHeader"]);

@@ -105,17 +105,15 @@ function inStream(router, proxy, streamID) {
 
 
 // object encapsulating the router-server interface
-exports.outStream = function (router, proxy, streamID, circ, addr) {
+exports.outStream = function (router, streamID, circ, addr) {
   // A stream object will contain
   //  router: reference to the router
-  //  proxy: reference to InProxy
   //  streamID
   //  circ: circuit this is on
   //  serverSocket: socket to the server
   //  alive: true if this is a good stream, false otherwise
 
   this.router = router;
-  this.proxy = proxy;
   this.streamID = streamID;
   this.circ = circ;
   this.alive = false;
@@ -128,18 +126,15 @@ exports.outStream = function (router, proxy, streamID, circ, addr) {
   }
   var port = tokens[tokens.length - 1];
 
-  this.logger("opening a socket to " + IP + ":" + port);
-  this.serverSocket = net.createConnection(port, IP);
-
   // non-reliable send for this stream; requires this.alive
   this.send = function (data) {
     if (this.alive) {
       for (var i = 0; i < (data.length/498); i++) {
         var chunk = data.substr(i*498, (i + 1)*498);
-        var cell = cells.createRelayCell(router.circuitID, this.streamID,
+        var cell = cells.createRelayCell(circ.inCircuitID, this.streamID,
           2, chunk);
-        
-        this.router.emit('send', cell);
+        // write it off
+        circ.inConn.socket.write(cell);
       }
     } else {
       this.logger("mayday mayday stream isn't alive but is being sent over!");
@@ -151,6 +146,9 @@ exports.outStream = function (router, proxy, streamID, circ, addr) {
       + ": " + data);
   }
 
+  this.logger("opening a socket to " + IP + ":" + port);
+  var serverSocket = net.createConnection(port, IP);
+
   serverSocket.on('connect', () => {
     this.logger("we're up and alive!");
     this.alive = true;
@@ -160,16 +158,19 @@ exports.outStream = function (router, proxy, streamID, circ, addr) {
   });
 
   serverSocket.on('timeout', () => {
-    this.emit('connectFailed');
+    this.router.emit('connectFailed');
   });
 
   serverSocket.on('error', (data) => {
-    this.emit('connectFailed');
+    this.router.emit('connectFailed');
   });
 
   serverSocket.on('data', (buf) => {
+    this.logger("received " + buf.length + " of data");
     this.send(buf.toString('ascii'));
   });
+
+  this.serverSocket = serverSocket;
 }
 
 util.inherits(inStream, events.EventEmitter);
