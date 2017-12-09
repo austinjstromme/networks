@@ -29,6 +29,7 @@ exports.makeInProxy = function (router, port) {
 
     var socket = new net.Socket();
     var serverConn = new connection.serverConnection(proxy, socket, clientConn);
+    stream.serverConn = serverConn;
 
     if (clientConn.pHeader["type"] != "CONNECT") {
       // send off the header
@@ -63,7 +64,8 @@ exports.makeInProxy = function (router, port) {
     }
   
     if (clientConn.inStream.alive) {
-      console.log("writing onto tor network " + body.length + " bytes");
+      console.log('writing onto tor network' + body.toString('ascii').length + 'bytes');
+      //console.log(body);
       // forward it on with correct encoding
       clientConn.inStream.send(body.toString('ascii'));
     } else {

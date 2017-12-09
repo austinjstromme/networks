@@ -92,9 +92,10 @@ function inStream(router, proxy, streamID) {
       // TODO: this should be a bit less than 512 to account for the header
       for (var i = 0; i < (data.length/498); i++) {
         var chunk = data.substr(i*498, (i + 1)*498);
+        this.logger("inStream sending " + chunk.length + " bytes");
         var cell = cells.createRelayCell(router.circuitID, this.streamID,
           2, chunk);
-        
+
         this.router.emit('send', cell);
       }
     } else {

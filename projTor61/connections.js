@@ -71,6 +71,7 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
 
   this.handleCell = (cell) => {
     var contents = cells.parseCell(cell);
+    console.log("got body = " + contents['body']);
 
     if (!contents["valid"]) {
       this.logger("CORRUPT CELL");

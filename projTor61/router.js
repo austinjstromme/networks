@@ -157,6 +157,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   router.on('send', (data) => {
     // sends data along our circuit
+    data = data.toString('ascii');
+    //router.logger("sending data = ");
+    //var pData = cells.parseCell(data);
+    //console.log(pData['body']);
 
     //var outRouterID =
     //  router.outCircuitIDToCircuit.get(router.circuitID).outRouterID;
@@ -164,7 +168,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     var circ = router.outCircuitIDToCircuit.get(router.circuitID);
     var conn = circ.outConn;
 
-    conn.socket.write(data);
+    conn.socket.write(data, 'ascii');
   });
 
   router.on('relay', (contents, TCPRouterConn) => {
@@ -208,10 +212,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
         circ.streamIDToOutStream.set(contents["streamID"], outStream);
       } else if (contents['relayCmd'] == 0x02) { // stream data, hand it off
+        console.log("body = ");
+        console.log(contents['body'].toString('ascii'));
         var outStream = circ.streamIDToOutStream.get(contents["streamID"]);
         outStream.serverSocket.write(contents['body'].toString('ascii'));
 
-        router.logger("got " + contents["body"].length + " bytes from the start of the circuit at the end");
+        router.logger("got " + contents["body"].toString('ascii').length + " bytes from the start of the circuit at the end");
       } else if (contents['relayCmd'] == 0x03) { // end request
         // TODO: implement
       } else if (contents['relayCmd'] == 0x04) { // connected
@@ -244,7 +250,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       if (contents['relayCmd'] == 0x01) { // begin
         router.logger("UNEXPECTED: connect at begin of circuit");
       } else if (contents['relayCmd'] == 0x02) { // stream data
-        router.logger("UNEXPECTED: stream data at begin of circuit");
+        // TODO: hand off the data to the inStream in some manner
+        var inStream = router.inStreamIDToInStream.get(contents['streamID']);
+        inStream.emit('response', contents['body']);
       } else if (contents['relayCmd'] == 0x03) { // end request
         router.logger("UNEXPECTED: end at begin of circuit");
       } else if (contents['relayCmd'] == 0x04) { // connected
@@ -379,7 +387,7 @@ function Router(port, groupID, instanceNum) {
   this.circuitLength = 0; // The circuit is currently just this router
   this.circuitCount = 3; // Every circuit starts with the id of 1.
   this.circuitID = 2; // the id of the circuit startting on this router
-  this.id = (this.groupID << 16) || this.instanceNum;
+  this.id = (this.groupID << 16) | this.instanceNum;
   this.streamCount = 1; // Streams start at 1 (0 is reserved)
   this.inProxy = null;
 
