@@ -20,7 +20,7 @@
 exports.parseCell = function (cell) {
   var contents = {};
 
-  var bufCell = Buffer.from(cell, 'ascii');
+  var bufCell = Buffer.from(cell, 'binary');
 
   contents["valid"] = false;
   if (cell.length != 512) {
@@ -48,7 +48,7 @@ exports.parseCell = function (cell) {
     contents["streamID"] = bufCell.readUInt16BE(3);
     contents["relayCmd"] = bufCell.readUInt8(13);
     var bodyLength = bufCell.readUInt16BE(11);
-    contents["body"] = bufCell.toString('ascii', 14, 14 + bodyLength);
+    contents["body"] = bufCell.toString('binary', 14, 14 + bodyLength);
     contents["valid"] = true;
     return contents;
   }
@@ -139,6 +139,7 @@ exports.createDestroyCell = function (circuitID) {
 
 // returns a relay cell using an ascii encoding
 exports.createRelayCell = function (circuitID, streamID, relayCmd, body) {
+  //body = body.toString('binary');
   if ((body.length + 14) > 512) {
     console.log("malformed body to createRelayCell!");
   }
@@ -152,8 +153,8 @@ exports.createRelayCell = function (circuitID, streamID, relayCmd, body) {
   buf.writeUInt16BE(body.length, 11);
   buf.writeUInt8(relayCmd, 13);
   if (body.length > 0) {
-    buf.write(body, 14);
+    buf.write(body, 14, body.length, 'binary');
   }
 
-  return buf.toString('ascii');
+  return buf.toString('binary');
 }

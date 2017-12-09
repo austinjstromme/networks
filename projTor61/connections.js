@@ -59,19 +59,20 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   }
 
   socket.on("data", (data) => {
-    var s = data.toString('ascii');
+    var s = data.toString('binary');
+
     if (s.length % 512 != 0) {
       this.logger("MALFORMED DATA (" + s.length + " bytes)");
     } else {
       for (var i = 0; i < s.length/512; i++) {
-        this.handleCell(s.substr(i*512, (i + 1)*512));
+        this.handleCell(s.substr(i*512, 512));
       }
     }
   });
 
   this.handleCell = (cell) => {
     var contents = cells.parseCell(cell);
-    console.log("got body = " + contents['body']);
+    //console.log("got body = " + contents['body']);
 
     if (!contents["valid"]) {
       this.logger("CORRUPT CELL");

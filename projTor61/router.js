@@ -74,14 +74,14 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     } else {
       // otherwise just send back a relay extend failed message
       var msg = cells.createRelayCell(circ.inCircuitID, 0x0, 0x0c, '');
-      circ.inConn.socket.write(msg);
+      circ.inConn.socket.write(msg, 'binary');
     }
   });
 
   // on a create message we update our tables accordingly
   router.on('create', (contents, TCPRouterConn) => {
     router.logger("CREATE");
-    //console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
+    // console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
 
     // create a circuit object
     var inCircuitID = contents["circuitID"];
@@ -131,7 +131,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       // send a relay extended back
       var cell = cells.createRelayCell(circ.inCircuitID, 0x0, 0x07, '');
       //router.openConns.get(circ.inRouterID).socket.write(cell);
-      circ.inConn.socket.write(cell);
+      circ.inConn.socket.write(cell, 'binary');
     }
   });
 
@@ -142,7 +142,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     TCPRouterConn.socket.write(cells.createRelayCell(circ.inCircuitID,
                                                      outStream.streamID,
                                                      0x04,
-                                                     ""));
+                                                     ""), 'binary');
   });
 
   router.on('connectFailed', (outStream) => {
@@ -152,23 +152,17 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     TCPRouterConn.socket.write(cells.createRelayCell(circ.inCircuitID,
                                                      outStream.streamID,
                                                      0x0b,
-                                                     ""));
+                                                     ""), 'binary');
   });
 
   router.on('send', (data) => {
     // sends data along our circuit
-    data = data.toString('ascii');
-    //router.logger("sending data = ");
-    //var pData = cells.parseCell(data);
-    //console.log(pData['body']);
-
-    //var outRouterID =
-    //  router.outCircuitIDToCircuit.get(router.circuitID).outRouterID;
-    //var conn = router.openConns.get(outRouterID);
+    //data = data.toString('binary');
+    var pData = cells.parseCell(data);
     var circ = router.outCircuitIDToCircuit.get(router.circuitID);
     var conn = circ.outConn;
 
-    conn.socket.write(data, 'ascii');
+    conn.socket.write(data, 'binary');
   });
 
   router.on('relay', (contents, TCPRouterConn) => {
@@ -183,7 +177,6 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     if ((((contents["circuitID"] % 2) == 0) && !TCPRouterConn.forward)
         || (((contents["circuitID"] % 2) == 1) && TCPRouterConn.forward)) {
         forwards = false;
-        router.logger("backward direction on relay");
     }
 
     // get the correct circuit to send messages along
@@ -196,7 +189,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     }
 
     if (circ.outRouterID == -1) { // we are the end of the circuit
-      router.logger("we've got a message for the end of the circuit!");
+      //router.logger("we've got a message for the end of the circuit!");
       if (contents['relayCmd'] == 0x01) {  // begin
         // TODO: do what we need to here to save some sort of outStream
         // send back that we've connected
@@ -212,12 +205,8 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
         circ.streamIDToOutStream.set(contents["streamID"], outStream);
       } else if (contents['relayCmd'] == 0x02) { // stream data, hand it off
-        console.log("body = ");
-        console.log(contents['body'].toString('ascii'));
         var outStream = circ.streamIDToOutStream.get(contents["streamID"]);
-        outStream.serverSocket.write(contents['body'].toString('ascii'));
-
-        router.logger("got " + contents["body"].toString('ascii').length + " bytes from the start of the circuit at the end");
+        outStream.serverSocket.write(contents['body'], 'binary');
       } else if (contents['relayCmd'] == 0x03) { // end request
         // TODO: implement
       } else if (contents['relayCmd'] == 0x04) { // connected
@@ -246,7 +235,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       }
 
     } else if (circ.inRouterID == -1) { // we are the beginning of the circuit
-      router.logger("we've got a message for the begin of the circuit!");
+      //router.logger("we've got a message for the begin of the circuit!");
       if (contents['relayCmd'] == 0x01) { // begin
         router.logger("UNEXPECTED: connect at begin of circuit");
       } else if (contents['relayCmd'] == 0x02) { // stream data
@@ -282,27 +271,15 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         router.emit('extendCircuitFailed');
       }
     } else { // hand off the relay
-      /*var routerID;
-      var circuitID;
-      console.log("direction = " + forwards);
-      if (forwards) { // hand it forwards
-        routerID = circ.outRouterID;
-        circuitID = circ.outCircuitID;
-      } else { // hand it backwards
-        routerID = circ.inRouterID;
-        circuitID = circ.inCircuitID;
-      }
-      router.logger("handing off a relay, inCircuitID = " + circuitID);
-      var msg = cells.createRelayCell(circuitID, contents['streamID'], contents['relayCmd'], contents['body']);
-      conn.socket.write(msg); // send the relay along*/
-
       var circuitID;
       var conn;
 
       if (forwards) { // hand it forwards
+        //router.logger("forwarding body of size = " + contents['body'].length);
         circuitID = circ.outCircuitID;
         conn = circ.outConn;
       } else { // hand it backwards
+        //router.logger("backwarding body of size = " + contents['body'].length);
         circuitID = circ.inCircuitID;
         conn = circ.inConn;
       }
@@ -311,7 +288,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
                                      contents['relayCmd'],
                                      contents['body']);
 
-      conn.socket.write(msg);
+      conn.socket.write(msg, 'binary');
     }
 
   });

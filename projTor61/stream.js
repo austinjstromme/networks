@@ -34,7 +34,7 @@ exports.makeInStream = function (router, proxy, streamID) {
 
     // convert to a buffer, then pass to serverConn as if it's real
     // (this is a hack to reuse the processing code in serverConn)
-    data = Buffer.from(data, 'ascii');
+    data = Buffer.from(data, 'binary');
     stream.serverConn.socket.emit('data', data);
   });
 
@@ -60,8 +60,10 @@ function inStream(router, proxy, streamID) {
   this.alive = false;
 
   this.logger = function (data) {
-    console.log("Tor61Router-" + router.id + "-inStream-" + this.streamID
-      + ": " + data);
+    if (LOGGING) {
+      console.log("Tor61Router-" + router.id + "-inStream-" + this.streamID
+        + ": " + data);
+    }
   }
 
   // reliable open for this stream
@@ -90,9 +92,9 @@ function inStream(router, proxy, streamID) {
   this.send = function (data) {
     if (this.alive) {
       // TODO: this should be a bit less than 512 to account for the header
-      for (var i = 0; i < (data.length/498); i++) {
-        var chunk = data.substr(i*498, (i + 1)*498);
-        this.logger("inStream sending " + chunk.length + " bytes");
+      for (var i = 0; i < (data.length/450); i++) {
+        var chunk = data.substr(i*450, 450);
+        this.logger("sending " + chunk.length + " bytes over our circuit");
         var cell = cells.createRelayCell(router.circuitID, this.streamID,
           2, chunk);
 
@@ -130,12 +132,13 @@ exports.outStream = function (router, streamID, circ, addr) {
   // non-reliable send for this stream; requires this.alive
   this.send = function (data) {
     if (this.alive) {
-      for (var i = 0; i < (data.length/498); i++) {
-        var chunk = data.substr(i*498, (i + 1)*498);
-        var cell = cells.createRelayCell(circ.inCircuitID, this.streamID,
+      for (var i = 0; i < (data.length/450); i++) {
+        var chunk = data.substr(i*450, 450);
+        //this.logger("sending " + chunk.length + " bytes backwards over the tor network");
+        var cell = cells.createRelayCell(this.circ.inCircuitID, this.streamID,
           2, chunk);
         // write it off
-        circ.inConn.socket.write(cell);
+        circ.inConn.socket.write(cell, 'binary');
       }
     } else {
       this.logger("mayday mayday stream isn't alive but is being sent over!");
@@ -143,8 +146,10 @@ exports.outStream = function (router, streamID, circ, addr) {
   }
 
   this.logger = function (data) {
-    console.log("Tor61Router-" + router.id + "-outStream-" + this.streamID
-      + ": " + data);
+    if (LOGGING) {
+      console.log("Tor61Router-" + router.id + "-outStream-" + this.streamID
+        + ": " + data);
+    }
   }
 
   this.logger("opening a socket to " + IP + ":" + port);
@@ -168,7 +173,7 @@ exports.outStream = function (router, streamID, circ, addr) {
 
   serverSocket.on('data', (buf) => {
     this.logger("received " + buf.length + " of data");
-    this.send(buf.toString('ascii'));
+    this.send(buf.toString('binary'));
   });
 
   this.serverSocket = serverSocket;

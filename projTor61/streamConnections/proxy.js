@@ -3,6 +3,7 @@
 var net = require('net');
 var connection = require('./connection');
 var stream = require('../stream');
+var cells = require('../cells');
 
 exports.makeInProxy = function (router, port) {
   var proxy = new net.createServer(function(socket) {
@@ -62,12 +63,11 @@ exports.makeInProxy = function (router, port) {
     if (body.length == 0) {
       return;
     }
-  
+
     if (clientConn.inStream.alive) {
-      console.log('writing onto tor network' + body.toString('ascii').length + 'bytes');
-      //console.log(body);
+      //console.log('writing onto tor network ' + body.length + ' bytes');
       // forward it on with correct encoding
-      clientConn.inStream.send(body.toString('ascii'));
+      clientConn.inStream.send(body);
     } else {
       router.logger("proxy trying to send over a non-alive connection");
     }
@@ -90,8 +90,8 @@ exports.makeInProxy = function (router, port) {
   proxy.on('serverBody', (stream, body) => {
     // received some body from the server; forward it along to the client
     if (!stream.clientConn.socket.closed) {
-      console.log("writing to client " + body.length + " bytes");
-      serverConn.clientConn.socket.write(body, serverConn.dataEncoding);
+      //console.log("writing to client " + body.length + " bytes");
+      stream.clientConn.socket.write(body, 'binary');
     } else {
       console.log("stream.clientConn.socket closed, no body sent");
     }

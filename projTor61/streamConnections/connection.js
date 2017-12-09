@@ -83,7 +83,7 @@ exports.clientConnection = function (proxy, inStream, socket) {
   this.headerBuf = null;
   this.sendBuf = null;
   this.serverConn = null;
-  this.dataEncoding = 'ascii';
+  this.dataEncoding = 'binary';
   events.EventEmitter.call(this);
 
   socket.on('data', (buf) => {
@@ -134,7 +134,7 @@ exports.serverConnection = function (proxy, socket, clientConn) {
   this.headerBuf = null;
   this.pHeader = null;
   this.clientConn = clientConn;
-  this.dataEncoding = 'ascii';
+  this.dataEncoding = 'binary';
 
   events.EventEmitter.call(this);
 
