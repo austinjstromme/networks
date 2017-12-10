@@ -1,2 +1,2 @@
-Austin Stromme astromme@cs.washington.edu
-Jaden Stock jadens@cs.washington.edu
+Austin Stromme 1312731 astromme@cs.washington.edu
+Jaden Stock 1364952 jadens@cs.washington.edu
