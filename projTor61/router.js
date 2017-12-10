@@ -263,9 +263,12 @@ exports.makeRouter = function (port, groupID, instanceNum) {
         }
       } else if (contents['relayCmd'] == 0x0b) { // begin failed
         // begin failed - emit an openFailed for the inStream
-        var inStream = router.inStreamIDToInStream.get(contents['streamID']);
-        router.delete(contents['streamID']);
-        inStream.emit('openFailed');
+        if (router.inStreamIDToInStream.has(contents['streamID'])) {
+          router.logger("begin failed on inStream = " + contents['streamID']);
+          var inStream = router.inStreamIDToInStream.get(contents['streamID']);
+          router.inStreamIDToInStream.delete(contents['streamID']);
+          inStream.emit('openFailed');
+        }
       } else if (contents['relayCmd'] == 0x0c) { // extend failed
         // extend failed - do something
         router.emit('extendCircuitFailed');

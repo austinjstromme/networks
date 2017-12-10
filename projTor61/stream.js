@@ -164,11 +164,11 @@ exports.outStream = function (router, streamID, circ, addr) {
   });
 
   serverSocket.on('timeout', () => {
-    this.router.emit('connectFailed');
+    this.router.emit('connectFailed', this);
   });
 
   serverSocket.on('error', (data) => {
-    this.router.emit('connectFailed');
+    this.router.emit('connectFailed', this);
   });
 
   serverSocket.on('data', (buf) => {

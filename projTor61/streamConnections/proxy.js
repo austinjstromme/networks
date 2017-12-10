@@ -75,6 +75,7 @@ exports.makeInProxy = function (router, port) {
 
   proxy.on('openFailed', (stream) => {
       // send back bad gateway
+      router.logger("sending back bad gateway");
       stream.clientConn.socket.write("HTTP/1.0 502 Bad Gateway\r\n\r\n");
   });
   
