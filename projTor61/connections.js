@@ -27,6 +27,8 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
   //  4: open has failed
   this.state = 0;
 
+  this.inCircuitIDToOutCircuitID = new Map();
+
   this.tryOpen = (tries) => {
     if (tries < MAX_TRIES) {
       if (this.state == 0 || this.state == 1) {
@@ -83,7 +85,11 @@ exports.TCPRouterConnection = function (router, socket, destRouterID) {
       // CREATE
       this.logger("CREATE");
       this.router.emit('create', contents, this);
+
+      
       this.socket.write(cells.createCreatedCell(contents["circuitID"]));
+
+
     } else if (contents["cmd"] == 2) {
       // CREATED
       this.logger("CREATED");

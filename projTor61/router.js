@@ -94,8 +94,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
     // update maps in router
     // router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
-    router.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
+    // router.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
     // router.logger("setting outCircuitIDToCircuit | " + outCircuitID + ":" + circ);
+    TCPRouterConn.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
     router.outCircuitIDToCircuit.set(outCircuitID, circ);
   });
 
@@ -110,6 +111,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     circ.outConn = TCPRouterConn;
 
     var iter = router.openConns.values();
+
+    if (circ.inConn != null) {
+      circ.inConn.inCircuitIDToOutCircuitID.set(circ.inCircuitID, circ.outCircuitID);  
+    }
 
     // separate responses based on whether its our own circuit
     if (circ.inRouterID == -1) {
@@ -182,7 +187,8 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     // get the correct circuit to send messages along
     var circ;
     if (forwards) {
-      var outCircuitID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+      // var outCircuitID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+      var outCircuitID = TCPRouterConn.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
       circ = router.outCircuitIDToCircuit.get(outCircuitID);
     } else {
       circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
@@ -374,8 +380,8 @@ function Router(port, groupID, instanceNum) {
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();
 
-  // Initialize inCircuitIDToOutCircuitID, a map which maps from global to local circuit ids
-  this.inCircuitIDToOutCircuitID = new Map();
+  // Initialize inCircuitIDToOutCircuitID, a map which maps from routerID -> inCircuitID -> outCircuitID
+  // this.inCircuitIDToOutCircuitID = new Map();
 
   // Initialize circuitLookup, a map from local circuit ids to circuit objects
   this.outCircuitIDToCircuit = new Map();
@@ -441,8 +447,11 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
       // make sure things are pointing correctly - possibly
       // delete the old circuitID from the map
       outCircuitID = makeCircuitID(outCircuitID, conn);
-      router.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
-                                           outCircuitID);
+      //router.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
+      //                                     outCircuitID);
+      // conn.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
+      //                                       outCircuitID);
+
       router.outCircuitIDToCircuit.set(outCircuitID, circuit);
       circuit.outCircuitID = outCircuitID;
       // console.log("sending create with");
@@ -462,10 +471,12 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
         var conn = new connections.TCPRouterConnection(router, socket,
           outRouterID);
 
+        router.openConns.set(outRouterID, conn);
+
         // make sure things are pointing correctly
         outCircuitID = makeCircuitID(outCircuitID, conn);
-        router.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
-                                             outCircuitID);
+        //router.inCircuitIDToOutCircuitID.set(circuit.inCircuitID,
+        //                                     outCircuitID);
         router.outCircuitIDToCircuit.set(outCircuitID, circuit);
         circuit.outCircuitID = outCircuitID;
 
