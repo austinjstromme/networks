@@ -30,7 +30,7 @@ exports.makeInStream = function (router, proxy, streamID) {
   });
 
   stream.on('response', (data) => {
-    stream.logger("received response from the server on inStream");
+    //stream.logger("received response from the server on inStream");
 
     // convert to a buffer, then pass to serverConn as if it's real
     // (this is a hack to reuse the processing code in serverConn)

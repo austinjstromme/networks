@@ -6,7 +6,7 @@ var util = require('util');
 var cells = require('./cells');
 var connections = require('./connections');
 var stream = require('./stream');
-var registration = require('../proj1/client');
+var registration = require('./proj1/proj1/client');
 var proxy = require('./streamConnections/proxy');
 
 const TIMEOUT = 3000; // timeout in ms
@@ -80,7 +80,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
 
   // on a create message we update our tables accordingly
   router.on('create', (contents, TCPRouterConn) => {
-    router.logger("CREATE");
+    router.logger("CREATE from " + TCPRouterConn.destRouterID);
     // console.log("TCPRouterConn.forward = " + TCPRouterConn.forward);
 
     // create a circuit object
@@ -92,12 +92,15 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     var circ = new Circuit(inCircuitID, outCircuitID, inRouterID, outRouterID);
     circ.inConn = TCPRouterConn;
 
-    // update maps in router
-    // router.logger("setting inCircuitIDToOutCircuitID | " + inCircuitID + ":" + outCircuitID);
-    // router.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
-    // router.logger("setting outCircuitIDToCircuit | " + outCircuitID + ":" + circ);
-    TCPRouterConn.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
+    // update our tables
+    //TCPRouterConn.inCircuitIDToOutCircuitID.set(inCircuitID, outCircuitID);
+    if (!router.localize.has(inRouterID)) {
+      router.localize.set(inRouterID, new Map());
+    }
+
+    router.localize.get(inRouterID).set(inCircuitID, outCircuitID);
     router.outCircuitIDToCircuit.set(outCircuitID, circ);
+    router.printRoutingTables();
   });
 
   router.on('created', (contents, TCPRouterConn) => {
@@ -110,11 +113,14 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     circ.outRouterID = TCPRouterConn.destRouterID;
     circ.outConn = TCPRouterConn;
 
-    var iter = router.openConns.values();
-
-    if (circ.inConn != null) {
-      circ.inConn.inCircuitIDToOutCircuitID.set(circ.inCircuitID, circ.outCircuitID);  
-    }
+    // update our tables IF the in router is not -1
+    /*if (circ.inRouterID != -1) {
+      if (!router.localize.has(circ.inRouterID)) {
+        router.localize.set(circ.inRouterID, new Map());
+      }
+  
+      router.localize.get(circ.inRouterID).set(inCircuitID, outCircuitID);
+    }*/
 
     // separate responses based on whether its our own circuit
     if (circ.inRouterID == -1) {
@@ -138,6 +144,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       //router.openConns.get(circ.inRouterID).socket.write(cell);
       circ.inConn.socket.write(cell, 'binary');
     }
+    router.printRoutingTables();
   });
 
   router.on('connected', (outStream) => {
@@ -188,7 +195,8 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     var circ;
     if (forwards) {
       // var outCircuitID = router.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
-      var outCircuitID = TCPRouterConn.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+      //var outCircuitID = TCPRouterConn.inCircuitIDToOutCircuitID.get(contents["circuitID"]);
+      var outCircuitID = router.localize.get(TCPRouterConn.destRouterID).get(contents["circuitID"]);
       circ = router.outCircuitIDToCircuit.get(outCircuitID);
     } else {
       circ = router.outCircuitIDToCircuit.get(contents["circuitID"]);
@@ -253,8 +261,10 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       } else if (contents['relayCmd'] == 0x04) { // connected
         router.logger("received a connected");
         // begin succeeded - emit an opened for the inStream
-        var inStream = router.inStreamIDToInStream.get(contents['streamID']);
-        inStream.emit('opened');
+        if (router.inStreamIDToInStream.has(contents['streamID'])) {
+          var inStream = router.inStreamIDToInStream.get(contents['streamID']);
+          inStream.emit('opened');
+        }
       } else if (contents['relayCmd'] == 0x06) { // extend request
         router.logger("UNEXPECTED: extend at begin of circuit");
       } else if (contents['relayCmd'] == 0x07) { // extended
@@ -284,11 +294,11 @@ exports.makeRouter = function (port, groupID, instanceNum) {
       var conn;
 
       if (forwards) { // hand it forwards
-        //router.logger("forwarding body of size = " + contents['body'].length);
+        //router.logger("forwarding");
         circuitID = circ.outCircuitID;
         conn = circ.outConn;
       } else { // hand it backwards
-        //router.logger("backwarding body of size = " + contents['body'].length);
+        //router.logger("backwarding");
         circuitID = circ.inCircuitID;
         conn = circ.inConn;
       }
@@ -303,7 +313,7 @@ exports.makeRouter = function (port, groupID, instanceNum) {
   });
 
   router.on('circuitEstablished', () => {
-    console.log("circuitEstablished!");
+    router.logger("circuitEstablished!");
     if (router.inProxy != null) { // this has already been called
       return;
     } else {
@@ -377,11 +387,13 @@ function Router(port, groupID, instanceNum) {
   this.streamCount = 1; // Streams start at 1 (0 is reserved)
   this.inProxy = null;
 
+  const PRINT_ROUTING = false;
+
   // Initialize openConns, a map of all open TCP connections to this router
   this.openConns = new Map();
 
   // Initialize inCircuitIDToOutCircuitID, a map which maps from routerID -> inCircuitID -> outCircuitID
-  // this.inCircuitIDToOutCircuitID = new Map();
+  this.localize= new Map();
 
   // Initialize circuitLookup, a map from local circuit ids to circuit objects
   this.outCircuitIDToCircuit = new Map();
@@ -400,6 +412,21 @@ function Router(port, groupID, instanceNum) {
   this.logger = (data) => {
     if (LOGGING) {
       console.log("Tor61Router-" + this.id + ": " + data);
+    }
+  }
+
+  this.printRoutingTables = () => {
+    if (PRINT_ROUTING) {
+      this.logger("routing tables...");
+      this.localize.forEach(function(val, routerID, map) {
+        console.log("    " + routerID + "  " );
+        console.log(val);
+      });
+      console.log(" inRouterID   |  outRouterID   |  inCircID   | outCircID ");
+      this.outCircuitIDToCircuit.forEach( function(circ, circuitID, map) {
+        console.log(circ.inRouterID + "   |   " + circ.outRouterID + "    |    "
+          + circ.inCircuitID + "   |   " + circ.outCircuitID);
+      });
     }
   }
 }
@@ -436,6 +463,7 @@ function Circuit (inCircuitID, outCircuitID, inRouterID, outRouterID) {
 // implements reliable create
 function reliableCreate (router, circuit, outCircuitID, outRouterID,
                         IP, port, tries) {
+  router.circuitCount += 2;
   if (circuit.outRouterID != -1) {
     // done
     return;
@@ -458,6 +486,7 @@ function reliableCreate (router, circuit, outCircuitID, outRouterID,
       // console.log(circuit);
 
       // try to create the next hop
+      router.logger("sending a create to " + outRouterID);
       conn.sendCreate(outCircuitID);
     } else {
       var socket = new net.createConnection(port, IP);
@@ -548,6 +577,7 @@ function extendOurCircuit (router, tries) {
                                             * router.availableRouters.length)];
   
     var body = destRouter.get('IP') + ":" + destRouter.get('port') + '\0' + destRouter.get('data');
+    router.logger("extending to " + destRouter.get('data'));
   
     reliableExtend(router, body, router.circuitLength, 0);
   } else if (tries < MAX_TRIES) {
