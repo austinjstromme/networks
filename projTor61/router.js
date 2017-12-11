@@ -174,7 +174,9 @@ exports.makeRouter = function (port, groupID, instanceNum) {
     var circ = router.outCircuitIDToCircuit.get(router.circuitID);
     var conn = circ.outConn;
 
-    conn.socket.write(data, 'binary');
+    if (!conn.socket.write.closed) {
+      conn.socket.write(data, 'binary');
+    }
   });
 
   router.on('relay', (contents, TCPRouterConn) => {
